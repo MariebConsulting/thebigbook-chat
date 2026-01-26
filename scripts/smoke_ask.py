@@ -4,22 +4,52 @@ from datetime import date
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
-from dotenv import load_dotenv
+# Local dev convenience only (Streamlit Cloud usually won't have a .env file)
+try:
+    from dotenv import load_dotenv  # type: ignore
+    load_dotenv()
+except Exception:
+    pass
+
+# Streamlit secrets (available on Cloud). Safe to import-guard.
+def _get_secret(name: str) -> Optional[str]:
+    try:
+        import streamlit as st  # type: ignore
+        val = st.secrets.get(name)
+        return str(val).strip() if val else None
+    except Exception:
+        return None
+
 from openai import OpenAI
 
 from app.rag.vectorstore import LanceVectorStore
 from scripts.ingest_manifest import embed_many  # must respect EMBED_PROVIDER
 
-load_dotenv()
-
 # -------------------------
 # OpenAI (answer synthesis only)
 # -------------------------
 OPENAI_MODEL = os.getenv("CHAT_MODEL", "gpt-4o-mini").strip()
-DAILY_BUDGET_USD = float(os.getenv("DAILY_BUDGET_USD", "1.00"))  # you can tune
+DAILY_BUDGET_USD = float(os.getenv("DAILY_BUDGET_USD", "1.00"))
 COST_LEDGER_PATH = Path("./db/cost_ledger.json")
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+def _require_openai_key() -> str:
+    key = (os.getenv("OPENAI_API_KEY") or "").strip()
+    if not key:
+        key = (_get_secret("OPENAI_API_KEY") or "").strip()
+
+    if not key:
+        raise RuntimeError(
+            "OPENAI_API_KEY is not set.\n\n"
+            "Local (PowerShell):\n"
+            '  $Env:OPENAI_API_KEY = "sk-..."\n\n'
+            "Streamlit Cloud:\n"
+            "  App → Settings → Secrets\n"
+            "  Add:\n"
+            "  OPENAI_API_KEY = \"sk-...\"\n"
+        )
+    return key
+
+client = OpenAI(api_key=_require_openai_key())
 
 def _ledger() -> Dict[str, Any]:
     if COST_LEDGER_PATH.exists():
@@ -51,12 +81,7 @@ def _record_spend(usd: float) -> None:
     led[k] = float(led.get(k, 0.0)) + float(usd)
     _save_ledger(led)
 
-# NOTE:
-# We can't perfectly compute cost offline without a pricing table.
-# So we do a pragmatic version:
-# - require you to set PER_CALL_USD as a conservative estimate for now
-# - later, we can swap to exact token pricing once you pick the final model/pricing.
-PER_CALL_USD = float(os.getenv("PER_CALL_USD", "0.01"))  # conservative placeholder
+PER_CALL_USD = float(os.getenv("PER_CALL_USD", "0.01"))
 
 # -------------------------
 # Answer synthesis
@@ -64,7 +89,6 @@ PER_CALL_USD = float(os.getenv("PER_CALL_USD", "0.01"))  # conservative placehol
 def synthesize_with_mini(question: str, hits: List[Any]) -> str:
     _check_budget_or_raise()
 
-    # Build evidence packet (keep it small + grounded)
     evidence = []
     for h in hits[:8]:
         evidence.append({
@@ -79,10 +103,7 @@ def synthesize_with_mini(question: str, hits: List[Any]) -> str:
         "Cite sources using the provided [cite] strings."
     )
 
-    user = {
-        "question": question,
-        "excerpts": evidence
-    }
+    user = {"question": question, "excerpts": evidence}
 
     resp = client.responses.create(
         model=OPENAI_MODEL,
@@ -90,30 +111,22 @@ def synthesize_with_mini(question: str, hits: List[Any]) -> str:
             {"role": "system", "content": system},
             {"role": "user", "content": json.dumps(user)}
         ],
-        # keep this cheap + consistent
         max_output_tokens=int(os.getenv("MAX_OUTPUT_TOKENS", "350")),
     )
 
-    # record spend (conservative fixed-per-call for now)
     _record_spend(PER_CALL_USD)
-
     return resp.output_text.strip()
 
 def ask(question: str, filters: Optional[Dict[str, Any]] = None, top_k: int = 10) -> str:
     store = LanceVectorStore()
-    v = embed_many([question])[0]          # embeddings stay local if EMBED_PROVIDER=local
+    v = embed_many([question])[0]
     hits = store.query(v, top_k=top_k, filters=filters)
 
     if not hits:
         return f"Question: {question}\n\nNo matches found in the current corpus."
 
-    answer = synthesize_with_mini(question, hits)
-    return answer
+    return synthesize_with_mini(question, hits)
 
 if __name__ == "__main__":
     q = os.getenv("Q", "").strip() or "How does AA describe Step One?"
-    # Example filters:
-    # filters = {"work": "twelve_twelve", "chapter": "Step 1"}
-    filters = None
-
-    print(ask(q, filters=filters, top_k=10))
+    print(ask(q, filters=None, top_k=10))
