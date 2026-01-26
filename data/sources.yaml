@@ -1,0 +1,295 @@
+# Point at plain-text files you control in /data/processed.
+documents:
+  # Big Book (official PDFs you downloaded)
+  - path: data/raw/aa_official/en_bigbook_preface.pdf
+    work: bigbook
+    source: aa_official
+    edition: 4th
+    title: Alcoholics Anonymous (Big Book)
+    chapter: Preface
+    section_path: bigbook/preface
+    source_reliability: official
+    edition_confidence: high
+
+  - path: data/raw/aa_official/en_bigbook_forewordfirstedition.pdf
+    work: bigbook
+    source: aa_official
+    edition: 1st
+    title: Alcoholics Anonymous (Big Book)
+    chapter: Foreword to First Edition
+    section_path: bigbook/foreword/1st
+    source_reliability: official
+    edition_confidence: high
+
+  - path: data/raw/aa_official/en_bigbook_forewordsecondedition.pdf
+    work: bigbook
+    source: aa_official
+    edition: 2nd
+    title: Alcoholics Anonymous (Big Book)
+    chapter: Foreword to Second Edition
+    section_path: bigbook/foreword/2nd
+    source_reliability: official
+    edition_confidence: high
+
+  - path: data/raw/aa_official/en_bigbook_forewordthirdedition.pdf
+    work: bigbook
+    source: aa_official
+    edition: 3rd
+    title: Alcoholics Anonymous (Big Book)
+    chapter: Foreword to Third Edition
+    section_path: bigbook/foreword/3rd
+    source_reliability: official
+    edition_confidence: high
+
+  - path: data/raw/aa_official/en_bigbook_forewordfourthedition.pdf
+    work: bigbook
+    source: aa_official
+    edition: 4th
+    title: Alcoholics Anonymous (Big Book)
+    chapter: Foreword to Fourth Edition
+    section_path: bigbook/foreword/4th
+    source_reliability: official
+    edition_confidence: high
+
+  - path: data/raw/aa_official/en_bigbook_foreworddoctorsopinion.pdf
+    work: bigbook
+    source: aa_official
+    edition: 4th
+    title: Alcoholics Anonymous (Big Book)
+    chapter: The Doctor's Opinion
+    section_path: bigbook/doctors-opinion
+    source_reliability: official
+    edition_confidence: high
+
+  # Chapters 1–11
+  - path: data/raw/aa_official/en_bigbook_chapt1.pdf
+    work: bigbook
+    source: aa_official
+    edition: 4th
+    title: Alcoholics Anonymous (Big Book)
+    chapter: Chapter 1
+    section_path: bigbook/ch01
+    source_reliability: official
+    edition_confidence: high
+
+  - path: data/raw/aa_official/en_bigbook_chapt2.pdf
+    work: bigbook
+    source: aa_official
+    edition: 4th
+    title: Alcoholics Anonymous (Big Book)
+    chapter: Chapter 2
+    section_path: bigbook/ch02
+    source_reliability: official
+    edition_confidence: high
+
+  - path: data/raw/aa_official/en_bigbook_chapt3.pdf
+    work: bigbook
+    source: aa_official
+    edition: 4th
+    title: Alcoholics Anonymous (Big Book)
+    chapter: Chapter 3
+    section_path: bigbook/ch03
+    source_reliability: official
+    edition_confidence: high
+
+  - path: data/raw/aa_official/en_bigbook_chapt4.pdf
+    work: bigbook
+    source: aa_official
+    edition: 4th
+    title: Alcoholics Anonymous (Big Book)
+    chapter: Chapter 4
+    section_path: bigbook/ch04
+    source_reliability: official
+    edition_confidence: high
+
+  - path: data/raw/aa_official/en_bigbook_chapt5.pdf
+    work: bigbook
+    source: aa_official
+    edition: 4th
+    title: Alcoholics Anonymous (Big Book)
+    chapter: Chapter 5
+    section_path: bigbook/ch05
+    source_reliability: official
+    edition_confidence: high
+
+  - path: data/raw/aa_official/en_bigbook_chapt6.pdf
+    work: bigbook
+    source: aa_official
+    edition: 4th
+    title: Alcoholics Anonymous (Big Book)
+    chapter: Chapter 6
+    section_path: bigbook/ch06
+    source_reliability: official
+    edition_confidence: high
+
+  - path: data/raw/aa_official/en_bigbook_chapt7.pdf
+    work: bigbook
+    source: aa_official
+    edition: 4th
+    title: Alcoholics Anonymous (Big Book)
+    chapter: Chapter 7
+    section_path: bigbook/ch07
+    source_reliability: official
+    edition_confidence: high
+
+  - path: data/raw/aa_official/en_bigbook_chapt8.pdf
+    work: bigbook
+    source: aa_official
+    edition: 4th
+    title: Alcoholics Anonymous (Big Book)
+    chapter: Chapter 8
+    section_path: bigbook/ch08
+    source_reliability: official
+    edition_confidence: high
+
+  - path: data/raw/aa_official/en_bigbook_chapt9.pdf
+    work: bigbook
+    source: aa_official
+    edition: 4th
+    title: Alcoholics Anonymous (Big Book)
+    chapter: Chapter 9
+    section_path: bigbook/ch09
+    source_reliability: official
+    edition_confidence: high
+
+  - path: data/raw/aa_official/en_bigbook_chapt10.pdf
+    work: bigbook
+    source: aa_official
+    edition: 4th
+    title: Alcoholics Anonymous (Big Book)
+    chapter: Chapter 10
+    section_path: bigbook/ch10
+    source_reliability: official
+    edition_confidence: high
+
+  - path: data/raw/aa_official/en_bigbook_chapt11.pdf
+    work: bigbook
+    source: aa_official
+    edition: 4th
+    title: Alcoholics Anonymous (Big Book)
+    chapter: Chapter 11
+    section_path: bigbook/ch11
+    source_reliability: official
+    edition_confidence: high
+
+  # Twelve & Twelve (Steps)
+  - path: data/raw/aa_official/en_step1.pdf
+    work: twelve_twelve
+    source: aa_official
+    edition: standard
+    title: Twelve Steps and Twelve Traditions
+    chapter: Step 1
+    section_path: 12x12/steps/01
+    source_reliability: official
+    edition_confidence: high
+
+  - path: data/raw/aa_official/en_step2.pdf
+    work: twelve_twelve
+    source: aa_official
+    edition: standard
+    title: Twelve Steps and Twelve Traditions
+    chapter: Step 2
+    section_path: 12x12/steps/02
+    source_reliability: official
+    edition_confidence: high
+
+  # (repeat for steps 3–12)
+  - path: data/raw/aa_official/en_step3.pdf
+    work: twelve_twelve
+    source: aa_official
+    edition: standard
+    title: Twelve Steps and Twelve Traditions
+    chapter: Step 3
+    section_path: 12x12/steps/03
+    source_reliability: official
+    edition_confidence: high
+
+  - path: data/raw/aa_official/en_step4.pdf
+    work: twelve_twelve
+    source: aa_official
+    edition: standard
+    title: Twelve Steps and Twelve Traditions
+    chapter: Step 4
+    section_path: 12x12/steps/04
+    source_reliability: official
+    edition_confidence: high
+
+  - path: data/raw/aa_official/en_step5.pdf
+    work: twelve_twelve
+    source: aa_official
+    edition: standard
+    title: Twelve Steps and Twelve Traditions
+    chapter: Step 5
+    section_path: 12x12/steps/05
+    source_reliability: official
+    edition_confidence: high
+
+  - path: data/raw/aa_official/en_step6.pdf
+    work: twelve_twelve
+    source: aa_official
+    edition: standard
+    title: Twelve Steps and Twelve Traditions
+    chapter: Step 6
+    section_path: 12x12/steps/06
+    source_reliability: official
+    edition_confidence: high
+
+  - path: data/raw/aa_official/en_step7.pdf
+    work: twelve_twelve
+    source: aa_official
+    edition: standard
+    title: Twelve Steps and Twelve Traditions
+    chapter: Step 7
+    section_path: 12x12/steps/07
+    source_reliability: official
+    edition_confidence: high
+
+  - path: data/raw/aa_official/en_step8.pdf
+    work: twelve_twelve
+    source: aa_official
+    edition: standard
+    title: Twelve Steps and Twelve Traditions
+    chapter: Step 8
+    section_path: 12x12/steps/08
+    source_reliability: official
+    edition_confidence: high
+
+  - path: data/raw/aa_official/en_step9.pdf
+    work: twelve_twelve
+    source: aa_official
+    edition: standard
+    title: Twelve Steps and Twelve Traditions
+    chapter: Step 9
+    section_path: 12x12/steps/09
+    source_reliability: official
+    edition_confidence: high
+
+  - path: data/raw/aa_official/en_step10_0.pdf
+    work: twelve_twelve
+    source: aa_official
+    edition: standard
+    title: Twelve Steps and Twelve Traditions
+    chapter: Step 10
+    section_path: 12x12/steps/10
+    source_reliability: official
+    edition_confidence: high
+
+  - path: data/raw/aa_official/en_step11.pdf
+    work: twelve_twelve
+    source: aa_official
+    edition: standard
+    title: Twelve Steps and Twelve Traditions
+    chapter: Step 11
+    section_path: 12x12/steps/11
+    source_reliability: official
+    edition_confidence: high
+
+  - path: data/raw/aa_official/en_step12.pdf
+    work: twelve_twelve
+    source: aa_official
+    edition: standard
+    title: Twelve Steps and Twelve Traditions
+    chapter: Step 12
+    section_path: 12x12/steps/12
+    source_reliability: official
+    edition_confidence: high
