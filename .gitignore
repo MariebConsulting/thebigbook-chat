@@ -1,18 +1,27 @@
+########################################
 # Python
+########################################
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 .venv/
+
+########################################
+# Environment / secrets
+########################################
 .env
 
-# DB / runtime artifacts
-db/
-*.db
-*.sqlite
-*.sqlite3
+########################################
+# LanceDB runtime artifacts (SAFE TO IGNORE)
+########################################
+db/cost_ledger.json
+db/ingested_doc_ids.txt
+db/*.lock
 
-# OS/editor
+########################################
+# OS / editor
+########################################
 .DS_Store
 .vscode/
 .idea/
