@@ -14,7 +14,6 @@ PALETTE = {
     "shadow": "0 18px 55px rgba(0,0,0,0.10)",
     "accent": "#3F4A41",
     "accent2": "#5B5247",
-
     "d_bg": "#111312",
     "d_bg2": "#1A1F1C",
     "d_card": "rgba(255,255,255,0.06)",
@@ -27,30 +26,17 @@ PALETTE = {
 if "dark" not in st.session_state:
     st.session_state.dark = False
 
-if "messages" not in st.session_state:
-    st.session_state.messages = [
-        {
-            "role": "assistant",
-            "content": "Hey — ask me anything about the Big Book or the 12&12. I’ll stay grounded in your corpus and include citations."
-        }
-    ]
-
 CSS = f"""
 <style>
-/* Hide Streamlit chrome */
 #MainMenu {{visibility: hidden;}}
 footer {{visibility: hidden;}}
 header {{visibility: hidden;}}
-[data-testid="stToolbar"] {{display:none !important;}}
-[data-testid="stHeader"] {{display:none !important;}}
 
-/* Layout */
 .block-container {{
   padding-top: 22px;
   max-width: 980px;
 }}
 
-/* Background */
 .stApp {{
   background: radial-gradient(1200px 600px at 20% 0%,
     {PALETTE["bg2"]} 0%,
@@ -69,13 +55,13 @@ body[data-dark="true"] .stApp {{
 
 h1, h2, h3, p, label, span, div {{ color: inherit; }}
 
-/* Header */
+/* Title row */
 .bb-top {{
   display:flex;
   align-items:flex-start;
   justify-content:space-between;
   gap:16px;
-  margin-bottom: 6px;
+  margin-bottom: 10px;
 }}
 
 .bb-title {{
@@ -92,75 +78,162 @@ h1, h2, h3, p, label, span, div {{ color: inherit; }}
   opacity: 0.78;
 }}
 
-/* Settings bar (prevents the toggle looking like an input) */
-.bb-settings {{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:12px;
-  margin: 12px 0 14px 0;
-  padding: 10px 12px;
-  border: 1px solid {PALETTE["border"]};
-  background: {PALETTE["card"]};
-  border-radius: 14px;
-  box-shadow: {PALETTE["shadow"]};
-}}
-
-body[data-dark="true"] .bb-settings {{
-  border: 1px solid {PALETTE["d_border"]};
-  background: {PALETTE["d_card"]};
-  box-shadow: 0 18px 55px rgba(0,0,0,0.35);
-}}
-
-.bb-chip {{
-  display:inline-flex;
-  align-items:center;
-  gap:8px;
-  font-weight: 700;
-  opacity: .9;
-}}
-
-.bb-hint {{
-  font-size: 13px;
-  opacity: .75;
-}}
-
-/* Chat container feel */
-.bb-chat-wrap {{
+/* Chat card */
+.bb-card {{
   border: 1px solid {PALETTE["border"]};
   background: {PALETTE["card"]};
   border-radius: 18px;
-  padding: 14px 14px 6px 14px;
+  padding: 18px;
   box-shadow: {PALETTE["shadow"]};
 }}
 
-body[data-dark="true"] .bb-chat-wrap {{
+body[data-dark="true"] .bb-card {{
   border: 1px solid {PALETTE["d_border"]};
   background: {PALETTE["d_card"]};
   box-shadow: 0 18px 55px rgba(0,0,0,0.35);
 }}
 
-/* Make chat bubbles nicer */
-[data-testid="stChatMessage"] > div {{
-  border-radius: 16px;
+/* Input styling */
+div[data-testid="stTextInput"] > div {{
+  border-radius: 14px !important;
+  background: rgba(255,255,255,0.82) !important;
+  border: 1px solid {PALETTE["border"]} !important;
+  box-shadow: none !important;
 }}
 
-[data-testid="stChatMessage"] p {{
-  line-height: 1.45;
+body[data-dark="true"] div[data-testid="stTextInput"] > div {{
+  background: rgba(255,255,255,0.06) !important;
+  border: 1px solid {PALETTE["d_border"]} !important;
 }}
 
+div[data-testid="stTextInput"] input {{
+  padding: 14px 14px !important;
+  font-size: 16px !important;
+}}
+
+div[data-testid="stTextInput"] label {{
+  font-weight: 700 !important;
+  opacity: 0.85 !important;
+  margin-bottom: 6px !important;
+  display:block !important;
+}}
+
+/* Buttons */
+div.stButton > button {{
+  width: 100%;
+  border-radius: 14px;
+  padding: 12px 14px;
+  border: 1px solid {PALETTE["border"]};
+  background: rgba(255,255,255,0.75);
+  font-weight: 800;
+}}
+
+div.stButton > button:hover {{
+  border-color: rgba(0,0,0,0.22);
+  transform: translateY(-1px);
+}}
+
+body[data-dark="true"] div.stButton > button {{
+  border: 1px solid {PALETTE["d_border"]};
+  background: rgba(255,255,255,0.06);
+}}
+
+body[data-dark="true"] div.stButton > button:hover {{
+  border-color: rgba(255,255,255,0.24);
+}}
+
+/* Answer bubble */
+.bb-answer {{
+  margin-top: 14px;
+  border-radius: 18px;
+  padding: 16px 18px;
+  border: 1px solid {PALETTE["border"]};
+  background: rgba(255,255,255,0.58);
+  white-space: pre-wrap;
+}}
+
+body[data-dark="true"] .bb-answer {{
+  border: 1px solid {PALETTE["d_border"]};
+  background: rgba(255,255,255,0.04);
+}}
+
+/* Tighten checkbox so it doesn't look like a big bar */
+div[data-testid="stCheckbox"] {{
+  margin-top: -2px;
+}}
+
+div[data-testid="stCheckbox"] label {{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  user-select:none;
+  font-weight: 800;
+}}
+
+div[data-testid="stCheckbox"] input {{
+  width: 46px !important;
+  height: 26px !important;
+  appearance: none !important;
+  background: rgba(0,0,0,0.10);
+  border: 1px solid {PALETTE["border"]};
+  border-radius: 999px !important;
+  position: relative !important;
+  outline: none !important;
+  cursor: pointer !important;
+}}
+
+div[data-testid="stCheckbox"] input:checked {{
+  background: rgba(63,74,65,0.75);
+  border-color: rgba(63,74,65,0.75);
+}}
+
+div[data-testid="stCheckbox"] input::before {{
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.92);
+  transition: transform 0.18s ease;
+}}
+
+div[data-testid="stCheckbox"] input:checked::before {{
+  transform: translateX(20px);
+}}
+
+body[data-dark="true"] div[data-testid="stCheckbox"] input {{
+  background: rgba(255,255,255,0.08);
+  border: 1px solid {PALETTE["d_border"]};
+}}
+
+body[data-dark="true"] div[data-testid="stCheckbox"] input:checked {{
+  background: rgba(169,179,167,0.45);
+  border-color: rgba(169,179,167,0.45);
+}}
+
+/* Make form spacing nice */
+.bb-input-wrap {{
+  margin-top: 6px;
+}}
+
+.bb-input-hint {{
+  font-size: 13px;
+  opacity: 0.75;
+  margin-top: -4px;
+  margin-bottom: 10px;
+}}
+
+.bb-divider {{
+  height: 10px;
+}}
 </style>
 """
 
 st.markdown(CSS, unsafe_allow_html=True)
 
-# Apply dark-mode marker (so CSS can switch)
-st.markdown(
-    f"<script>document.body.setAttribute('data-dark','{str(st.session_state.dark).lower()}');</script>",
-    unsafe_allow_html=True,
-)
-
-# Title
+# Header (clean)
 st.markdown(
     """
 <div class="bb-top">
@@ -173,54 +246,53 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Settings row (toggle here, not next to your input)
-left, right = st.columns([1, 1], vertical_alignment="center")
-with left:
-    st.markdown('<div class="bb-chip">⚙️ Settings</div>', unsafe_allow_html=True)
-with right:
-    st.session_state.dark = st.toggle("Dark mode", value=st.session_state.dark)
+# Clean “settings” (collapsible; keeps top uncluttered)
+with st.expander("Preferences", expanded=False):
+    st.checkbox("Dark mode", key="dark")
 
-# Re-apply marker after toggle
+# Apply marker after checkbox render
 st.markdown(
     f"<script>document.body.setAttribute('data-dark','{str(st.session_state.dark).lower()}');</script>",
     unsafe_allow_html=True,
 )
 
-# Action buttons (kept out of the chat input area)
-btn1, btn2 = st.columns([1, 1], gap="medium")
-daily_clicked = btn2.button("Daily Reflection", use_container_width=True)
+# Main card
+st.markdown('<div class="bb-card">', unsafe_allow_html=True)
 
-if daily_clicked:
+st.markdown('<div class="bb-input-wrap">', unsafe_allow_html=True)
+st.markdown('<div class="bb-input-hint">Type a message below, then press <b>Send</b>.</div>', unsafe_allow_html=True)
+
+with st.form("ask_form", clear_on_submit=False):
+    c1, c2 = st.columns([6, 2], gap="small")
+
+    with c1:
+        question = st.text_input(
+            "Message",
+            placeholder="Ask anything… (e.g., What does AA say about fear?)",
+        )
+
+    with c2:
+        send_clicked = st.form_submit_button("Send", use_container_width=True)
+
+    st.markdown('<div class="bb-divider"></div>', unsafe_allow_html=True)
+    daily_clicked = st.form_submit_button("Daily Reflection", use_container_width=True)
+
+st.markdown("</div>", unsafe_allow_html=True)
+st.markdown("</div>", unsafe_allow_html=True)
+
+# Output
+if send_clicked and question.strip():
+    with st.spinner("Searching..."):
+        result = ask(question, filters=None, top_k=10)
+    safe = html.escape(result)
+    st.markdown(f'<div class="bb-answer">{safe}</div>', unsafe_allow_html=True)
+
+elif daily_clicked:
     daily_prompt = (
         "Give me today’s AA Daily Reflection style guidance grounded only in the Big Book and 12&12 excerpts you have. "
         "Keep it short, practical, and cite sources."
     )
-    st.session_state.messages.append({"role": "user", "content": "Daily Reflection"})
     with st.spinner("Searching..."):
         result = ask(daily_prompt, filters=None, top_k=10)
-    st.session_state.messages.append({"role": "assistant", "content": result})
-    st.rerun()
-
-# Chat “window”
-st.markdown('<div class="bb-chat-wrap">', unsafe_allow_html=True)
-
-for m in st.session_state.messages:
-    with st.chat_message(m["role"]):
-        # Allow markdown + keep safe rendering
-        st.markdown(html.escape(m["content"]).replace("\n", "  \n"))
-
-st.markdown("</div>", unsafe_allow_html=True)
-
-# Chat input (this is what makes it feel like a real bot)
-prompt = st.chat_input("Ask about fear, resentment, Step work, prayer, amends…")
-
-if prompt:
-    st.session_state.messages.append({"role": "user", "content": prompt})
-
-    with st.chat_message("assistant"):
-        with st.spinner("Searching..."):
-            result = ask(prompt, filters=None, top_k=10)
-        st.markdown(html.escape(result).replace("\n", "  \n"))
-
-    st.session_state.messages.append({"role": "assistant", "content": result})
-    st.rerun()
+    safe = html.escape(result)
+    st.markdown(f'<div class="bb-answer">{safe}</div>', unsafe_allow_html=True)
