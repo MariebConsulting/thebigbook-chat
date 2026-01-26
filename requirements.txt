@@ -2,7 +2,6 @@ streamlit==1.41.1
 python-dotenv==1.0.1
 openai==2.15.0
 lancedb==0.16.0
-pyarrow==17.0.0
 pyyaml==6.0.2
 pdfplumber==0.11.5
 pillow==11.1.0
