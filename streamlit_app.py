@@ -31,6 +31,11 @@ PALETTE = {
 # ----------------------------
 # LanceDB chat storage
 # ----------------------------
+
+from datetime import datetime, timezone
+import pyarrow as pa
+import lancedb
+
 DB_DIR = "./db/lancedb"
 CHAT_TABLE = "chat_messages"
 
@@ -40,6 +45,7 @@ def _db():
 def _ensure_chat_table():
     db = _db()
     names = set(db.table_names())
+
     if CHAT_TABLE in names:
         return db.open_table(CHAT_TABLE)
 
@@ -49,20 +55,42 @@ def _ensure_chat_table():
         pa.field("role", pa.string()),     # "user" | "assistant"
         pa.field("content", pa.string()),
     ])
-    # Create empty table with schema
-    return db.create_table(CHAT_TABLE, data=[], schema=schema)
+
+    # LanceDB cannot create tables from an empty list.
+    # Workaround: create with one dummy row, then delete it.
+    dummy = [{
+        "session_id": "__init__",
+        "ts": datetime.now(timezone.utc),
+        "role": "system",
+        "content": "init",
+    }]
+
+    tbl = db.create_table(
+        CHAT_TABLE,
+        data=dummy,
+        schema=schema,
+    )
+
+    tbl.delete("session_id = '__init__'")
+    return tbl
 
 def _load_messages(session_id: str, limit: int = 200) -> list[dict]:
     tbl = _ensure_chat_table()
-    # Lance filter support can vary by version; keep it robust:
     df = tbl.to_pandas()
+
     if df.empty:
         return []
-    df = df[df["session_id"] == session_id].sort_values("ts").tail(limit)
-    out = []
-    for _, r in df.iterrows():
-        out.append({"role": str(r["role"]), "content": str(r["content"])})
-    return out
+
+    df = (
+        df[df["session_id"] == session_id]
+        .sort_values("ts")
+        .tail(limit)
+    )
+
+    return [
+        {"role": str(r["role"]), "content": str(r["content"])}
+        for _, r in df.iterrows()
+    ]
 
 def _append_message(session_id: str, role: str, content: str) -> None:
     tbl = _ensure_chat_table()
@@ -72,6 +100,7 @@ def _append_message(session_id: str, role: str, content: str) -> None:
         "role": role,
         "content": content,
     }])
+
 
 # ----------------------------
 # State
