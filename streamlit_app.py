@@ -18,61 +18,28 @@ st.set_page_config(page_title="The Big Book .chat", layout="wide")
 # Modern (non-blue) palette
 # ============================
 PALETTE = {
-    # Light
-    "bg": "#F4F1EA",        # warm parchment
-    "bg2": "#EEE7DD",       # soft wash
-    "card": "rgba(255,255,255,0.72)",
-    "text": "#1F1F1D",
-    "muted": "rgba(31,31,29,0.70)",
-    "border": "rgba(31,31,29,0.14)",
+    # Light mode (warm sand + paper + charcoal)
+    "bg": "#F3EEE6",          # soft sand
+    "bg2": "#E9E1D6",         # warm fog
+    "card": "rgba(255,255,255,0.78)",
+    "text": "#1C1B19",        # near-charcoal
+    "muted": "rgba(28,27,25,0.70)",
+    "border": "rgba(28,27,25,0.14)",
     "shadow": "0 18px 55px rgba(0,0,0,0.10)",
 
     # Accents (no blue)
-    "accent": "#7A3E2B",    # warm rust
-    "accent2": "#3F4A41",   # deep sage-charcoal
+    "accent": "#2E3A34",      # deep pine-charcoal
+    "accent2": "#A45A3C",     # warm clay (sparingly)
 
-    # Chat bubbles
-    "user_bg": "rgba(122,62,43,0.10)",   # warm tint
-    "asst_bg": "rgba(255,255,255,0.92)",
-
-    # Dark
-    "d_bg": "#0F1110",
-    "d_bg2": "#161A18",
+    # Dark mode (espresso + ink)
+    "d_bg": "#11100F",
+    "d_bg2": "#1A1816",
     "d_card": "rgba(255,255,255,0.06)",
-    "d_text": "#F3F2EE",
-    "d_muted": "rgba(243,242,238,0.70)",
-    "d_border": "rgba(243,242,238,0.14)",
-
-    "d_user_bg": "rgba(189,120,92,0.18)",
-    "d_asst_bg": "rgba(27,30,34,0.95)",
+    "d_text": "#F4F0E8",
+    "d_muted": "rgba(244,240,232,0.68)",
+    "d_border": "rgba(244,240,232,0.14)",
+    "d_accent": "#B9C3B8",    # muted sage-gray
 }
-
-# ============================
-# Session state
-# ============================
-if "dark" not in st.session_state:
-    st.session_state.dark = False
-
-if "chat_session_id" not in st.session_state:
-    st.session_state.chat_session_id = str(uuid.uuid4())
-
-if "messages" not in st.session_state:
-    # Load prior messages from LanceDB (if any)
-    st.session_state.messages = _load_messages(
-        st.session_state.chat_session_id,
-        limit=400
-    )
-
-    # Seed a warm welcome if this is a new session
-    if not st.session_state.messages:
-        welcome = (
-            "Hey.\n\n"
-            "Ask me anything about the Big Book or the Twelve & Twelve. "
-            "I’ll stay grounded in the text and list sources at the end."
-        )
-        st.session_state.messages = [
-            {"role": "assistant", "content": welcome}
-        ]
 
 # ============================
 # LanceDB chat storage
@@ -153,6 +120,35 @@ def _new_chat_session():
 # Load persisted chat once per run (only if local state is empty)
 if not st.session_state.messages:
     st.session_state.messages = _load_messages(st.session_state.chat_session_id, limit=400)
+
+
+# ============================
+# Session state
+# ============================
+if "dark" not in st.session_state:
+    st.session_state.dark = False
+
+if "chat_session_id" not in st.session_state:
+    st.session_state.chat_session_id = str(uuid.uuid4())
+
+if "messages" not in st.session_state:
+    # Load prior messages from LanceDB (if any)
+    st.session_state.messages = _load_messages(
+        st.session_state.chat_session_id,
+        limit=400
+    )
+
+    # Seed a warm welcome if this is a new session
+    if not st.session_state.messages:
+        welcome = (
+            "Hey.\n\n"
+            "Ask me anything about the Big Book or the Twelve & Twelve. "
+            "I’ll stay grounded in the text and list sources at the end."
+        )
+        st.session_state.messages = [
+            {"role": "assistant", "content": welcome}
+        ]
+
 
 # ============================
 # CSS
