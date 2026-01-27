@@ -45,7 +45,7 @@ def _require_openai_key() -> str:
             "Streamlit Cloud:\n"
             "  App → Settings → Secrets\n"
             "  Add:\n"
-            '  OPENAI_API_KEY = "sk-..."\n'
+            "  OPENAI_API_KEY = \"sk-...\"\n"
         )
     return key
 
@@ -83,19 +83,26 @@ def _record_spend(usd: float) -> None:
 
 PER_CALL_USD = float(os.getenv("PER_CALL_USD", "0.01"))
 
-def _format_sources(used: List[str]) -> str:
-    used = [u.strip() for u in used if u and u.strip()]
-    # Deduplicate while preserving order
-    seen = set()
-    ordered = []
-    for u in used:
-        if u not in seen:
-            seen.add(u)
-            ordered.append(u)
-    if not ordered:
-        return ""
-    lines = "\n".join([f"- {u}" for u in ordered])
-    return f"\n\nSources:\n{lines}"
+def _append_sources(answer_text: str, cites: List[str]) -> str:
+    # Always end with a clean Sources section (flat bullet list)
+    uniq = []
+    for c in cites:
+        c = (c or "").strip()
+        if c and c not in uniq:
+            uniq.append(c)
+
+    # If the model included a "Sources:" section anyway, strip it (we re-add deterministically)
+    lower = answer_text.lower()
+    idx = lower.find("\nsources:")
+    if idx != -1:
+        answer_text = answer_text[:idx].rstrip()
+
+    if not uniq:
+        return answer_text.strip()
+
+    lines = [answer_text.strip(), "", "Sources:"]
+    lines.extend([f"- {c}" for c in uniq])
+    return "\n".join(lines).strip()
 
 # -------------------------
 # Answer synthesis
@@ -104,35 +111,33 @@ def synthesize_with_mini(question: str, hits: List[Any]) -> str:
     _check_budget_or_raise()
 
     evidence = []
-    cite_list = []
+    cites = []
     for h in hits[:8]:
-        cite = getattr(h, "cite", "") or ""
-        cite_list.append(cite)
         evidence.append({
-            "cite": cite,
-            "text": (getattr(h, "text", "") or "")[:900]
+            "cite": h.cite,
+            "text": (h.text or "")[:900]
         })
+        if getattr(h, "cite", None):
+            cites.append(str(h.cite))
 
-system = (
-    "You are a warm, grounded AA Big Book / 12&12 assistant.\n"
-    "Your job is to help the user in a natural, conversational way — like a good sponsor-friend.\n\n"
-    "Rules:\n"
-    "1) Ground your answer primarily in the provided excerpts. Quote or paraphrase them naturally.\n"
-    "2) You may add context, practical examples, or gentle insights that complement the literature "
-    "if it helps the user — but make it clear when you're doing so.\n"
-    "3) If the excerpts don't fully address something, acknowledge that and offer what you can.\n"
-    "4) Do NOT put citations in the body of your answer.\n"
-    "5) End your response with a section titled exactly: 'Sources:' followed by a flat bullet list.\n"
-    "   Each bullet must be one of the provided cite strings, exactly as given.\n"
-    "   No nested bullets. No extra commentary in the Sources section.\n\n"
-    "Style:\n"
-    "- Be human. Be kind. Short paragraphs. Practical.\n"
-    "- Prefer 4–10 sentences unless the user asks for depth.\n"
-    "- Avoid sterile outlines unless the user asks for a list.\n"
-    "- When adding context beyond the excerpts, use phrases like 'Many people find...' or "
-    "'In practice...' to signal you're offering broader perspective.\n"
-)
-
+    system = (
+        "You are a warm, grounded AA Big Book / 12&12 assistant.\n"
+        "Your job is to help the user in a natural, conversational way — like a good sponsor-friend.\n\n"
+        "Rules:\n"
+        "1) Ground your answer primarily in the provided excerpts. Quote or paraphrase them naturally.\n"
+        "2) You may add context, practical examples, or gentle insights that complement the literature "
+        "if it helps the user — but make it clear when you're doing so.\n"
+        "3) If the excerpts don't fully address something, acknowledge that and offer what you can.\n"
+        "4) Do NOT put citations in the body of your answer.\n"
+        "5) Do not mention 'blocks'.\n"
+        "6) Do not include a Sources section — it will be appended automatically.\n\n"
+        "Style:\n"
+        "- Be human. Be kind. Short paragraphs. Practical.\n"
+        "- Prefer 4–10 sentences unless the user asks for depth.\n"
+        "- Avoid sterile outlines unless the user asks for a list.\n"
+        "- When adding context beyond the excerpts, use phrases like 'Many people find...' or "
+        "'In practice...' to signal you're offering broader perspective.\n"
+    )
 
     user = {"question": question, "excerpts": evidence}
 
@@ -147,18 +152,8 @@ system = (
 
     _record_spend(PER_CALL_USD)
 
-    text = (resp.output_text or "").strip()
-
-    # If the model forgot Sources, append best-effort from retrieved hits
-    if "Sources:" not in text:
-        text = text.rstrip() + _format_sources(cite_list)
-    else:
-        # Clean up: remove duplicate "Sources:" sections if it hallucinated multiples
-        parts = text.split("Sources:")
-        if len(parts) > 2:
-            text = parts[0].rstrip() + "\n\nSources:" + parts[-1].lstrip()
-
-    return text.strip()
+    answer = resp.output_text.strip()
+    return _append_sources(answer, cites)
 
 def ask(question: str, filters: Optional[Dict[str, Any]] = None, top_k: int = 10) -> str:
     store = LanceVectorStore()
@@ -166,7 +161,7 @@ def ask(question: str, filters: Optional[Dict[str, Any]] = None, top_k: int = 10
     hits = store.query(v, top_k=top_k, filters=filters)
 
     if not hits:
-        return "I couldn’t find a relevant passage in the current corpus for that question.\n\nSources:\n- (no matches)"
+        return "I couldn’t find supporting excerpts in the current corpus for that question."
 
     return synthesize_with_mini(question, hits)
 

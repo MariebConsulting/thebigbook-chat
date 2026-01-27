@@ -1,14 +1,14 @@
-
-import re
-import html
 import streamlit as st
+from datetime import datetime, timezone
+import uuid
+
+import lancedb
+import pyarrow as pa
+
 from scripts.smoke_ask import ask
 
 st.set_page_config(page_title="The Big Book .chat", layout="wide")
 
-# ----------------------------
-# Palette
-# ----------------------------
 PALETTE = {
     "bg": "#E7E1D7",
     "bg2": "#DCD3C7",
@@ -28,70 +28,65 @@ PALETTE = {
     "d_accent": "#A9B3A7",
 }
 
+# ----------------------------
+# LanceDB chat storage
+# ----------------------------
+DB_DIR = "./db/lancedb"
+CHAT_TABLE = "chat_messages"
+
+def _db():
+    return lancedb.connect(DB_DIR)
+
+def _ensure_chat_table():
+    db = _db()
+    names = set(db.table_names())
+    if CHAT_TABLE in names:
+        return db.open_table(CHAT_TABLE)
+
+    schema = pa.schema([
+        pa.field("session_id", pa.string()),
+        pa.field("ts", pa.timestamp("ms")),
+        pa.field("role", pa.string()),     # "user" | "assistant"
+        pa.field("content", pa.string()),
+    ])
+    # Create empty table with schema
+    return db.create_table(CHAT_TABLE, data=[], schema=schema)
+
+def _load_messages(session_id: str, limit: int = 200) -> list[dict]:
+    tbl = _ensure_chat_table()
+    # Lance filter support can vary by version; keep it robust:
+    df = tbl.to_pandas()
+    if df.empty:
+        return []
+    df = df[df["session_id"] == session_id].sort_values("ts").tail(limit)
+    out = []
+    for _, r in df.iterrows():
+        out.append({"role": str(r["role"]), "content": str(r["content"])})
+    return out
+
+def _append_message(session_id: str, role: str, content: str) -> None:
+    tbl = _ensure_chat_table()
+    tbl.add([{
+        "session_id": session_id,
+        "ts": datetime.now(timezone.utc),
+        "role": role,
+        "content": content,
+    }])
+
+# ----------------------------
+# State
+# ----------------------------
 if "dark" not in st.session_state:
     st.session_state.dark = False
 
+if "chat_session_id" not in st.session_state:
+    st.session_state.chat_session_id = str(uuid.uuid4())
+
 if "messages" not in st.session_state:
-    st.session_state.messages = [
-        {
-            "role": "assistant",
-            "content": "Hey — ask me anything about the Big Book or the 12&12. I’ll stay grounded in your corpus and include sources at the end.",
-        }
-    ]
+    st.session_state.messages = _load_messages(st.session_state.chat_session_id, limit=400)
 
 # ----------------------------
-# Helpers
-# ----------------------------
-def normalize_sources(text: str) -> str:
-    """
-    Ensures:
-    - No citations in body required (your system prompt handles that)
-    - "Sources:" exists
-    - sources are a FLAT bullet list
-    - removes nested bullet weirdness
-    """
-    if not text:
-        return text
-
-    # Split on Sources: (case-insensitive), keep body separate
-    parts = re.split(r"\n\s*Sources:\s*\n|\n\s*Sources:\s*", text, flags=re.IGNORECASE)
-    body = parts[0].strip()
-
-    # Collect cite strings from anywhere in the response (prefer bracketed cites)
-    # Example: [bigbook (4th) — bigbook/ch05 — Chunk#10]
-    cites = re.findall(r"\[[^\[\]]+?\]", text)
-
-    # Also accept raw cite-like lines if model returns them without brackets
-    # (rare, but helps)
-    if not cites and len(parts) > 1:
-        tail = parts[1]
-        for line in tail.splitlines():
-            line = line.strip("•- \t")
-            if line:
-                cites.append(line)
-
-    # Dedup while keeping order
-    seen = set()
-    flat = []
-    for c in cites:
-        c = c.strip()
-        if c and c not in seen:
-            seen.add(c)
-            flat.append(c)
-
-    if not flat:
-        # If none, return body as-is
-        return body
-
-    sources_block = "Sources:\n" + "\n".join([f"- {c}" for c in flat])
-    return f"{body}\n\n{sources_block}".strip()
-
-def safe_text(s: str) -> str:
-    # Keep things safe + predictable inside markdown
-    return html.escape(s or "").replace("\n", "\n\n")
-
-# ----------------------------
-# CSS
+# CSS (clean top + centered chat)
 # ----------------------------
 CSS = f"""
 <style>
@@ -100,7 +95,7 @@ footer {{visibility: hidden;}}
 header {{visibility: hidden;}}
 
 .block-container {{
-  padding-top: 22px;
+  padding-top: 18px;
   max-width: 980px;
 }}
 
@@ -120,17 +115,20 @@ body[data-dark="true"] .stApp {{
   color: {PALETTE["d_text"]};
 }}
 
-h1, h2, h3, p, label, span, div {{ color: inherit; }}
-
 .bb-top {{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:16px;
   margin-bottom: 10px;
 }}
 
 .bb-title {{
-  font-size: 42px;
+  font-size: 40px;
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1.05;
+  margin: 0;
 }}
 
 .bb-sub {{
@@ -139,166 +137,113 @@ h1, h2, h3, p, label, span, div {{ color: inherit; }}
   opacity: 0.78;
 }}
 
-.bb-toolbar {{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:12px;
-  margin: 10px 0 14px;
-}}
-
-.bb-pill {{
-  border: 1px solid {PALETTE["border"]};
-  background: rgba(255,255,255,0.55);
-  border-radius: 999px;
-  padding: 8px 12px;
-}}
-
-body[data-dark="true"] .bb-pill {{
-  border: 1px solid {PALETTE["d_border"]};
-  background: rgba(255,255,255,0.05);
-}}
-
-.bb-chat-wrap {{
+.bb-card {{
   border: 1px solid {PALETTE["border"]};
   background: {PALETTE["card"]};
   border-radius: 18px;
-  padding: 14px 14px;
+  padding: 14px 14px 6px 14px;
   box-shadow: {PALETTE["shadow"]};
 }}
 
-body[data-dark="true"] .bb-chat-wrap {{
+body[data-dark="true"] .bb-card {{
   border: 1px solid {PALETTE["d_border"]};
   background: {PALETTE["d_card"]};
+  box-shadow: 0 18px 55px rgba(0,0,0,0.35);
 }}
 
 .bb-hint {{
   font-size: 13px;
   opacity: 0.75;
-  margin: 6px 2px 10px;
+  margin: 4px 0 10px 2px;
 }}
 
-.bb-divider {{
-  height: 8px;
+.bb-controls {{
+  margin-top: 6px;
 }}
 
-/* Chat message bubble styling */
-div[data-testid="stChatMessage"] > div {{
-  border-radius: 16px !important;
-  padding: 10px 12px !important;
-}}
-
-div[data-testid="stChatMessage"][data-testid="stChatMessage-user"] > div {{
-  background: rgba(255,255,255,0.78) !important;
-  border: 1px solid {PALETTE["border"]} !important;
-}}
-
-body[data-dark="true"] div[data-testid="stChatMessage"][data-testid="stChatMessage-user"] > div {{
-  background: rgba(255,255,255,0.06) !important;
-  border: 1px solid {PALETTE["d_border"]} !important;
-}}
-
-div[data-testid="stChatMessage"][data-testid="stChatMessage-assistant"] > div {{
-  background: rgba(255,255,255,0.52) !important;
-  border: 1px solid {PALETTE["border"]} !important;
-}}
-
-body[data-dark="true"] div[data-testid="stChatMessage"][data-testid="stChatMessage-assistant"] > div {{
-  background: rgba(255,255,255,0.04) !important;
-  border: 1px solid {PALETTE["d_border"]} !important;
-}}
-
-/* Make the input feel intentional */
 div[data-testid="stChatInput"] textarea {{
   border-radius: 14px !important;
 }}
+
 </style>
 """
-
 st.markdown(CSS, unsafe_allow_html=True)
 
-# ----------------------------
 # Header
-# ----------------------------
 st.markdown(
     """
 <div class="bb-top">
-  <div class="bb-title">The Big Book .chat</div>
-  <div class="bb-sub">Ask anything. Citations enforced.</div>
+  <div>
+    <div class="bb-title">The Big Book .chat</div>
+    <div class="bb-sub">Warm guidance, grounded in the text. Sources at the bottom.</div>
+  </div>
 </div>
 """,
     unsafe_allow_html=True,
 )
 
-# Preferences (kept minimal)
 with st.expander("Preferences", expanded=False):
     st.checkbox("Dark mode", key="dark")
+    if st.button("New chat", use_container_width=True):
+        st.session_state.chat_session_id = str(uuid.uuid4())
+        st.session_state.messages = []
+        st.rerun()
 
 st.markdown(
     f"<script>document.body.setAttribute('data-dark','{str(st.session_state.dark).lower()}');</script>",
     unsafe_allow_html=True,
 )
 
-# Toolbar (keeps top clean)
-t1, t2 = st.columns([1, 1], gap="small")
-with t1:
-    if st.button("Daily Reflection", use_container_width=True):
-        st.session_state._trigger_daily = True
-with t2:
-    if st.button("Clear chat", use_container_width=True):
-        st.session_state.messages = [
-            {
-                "role": "assistant",
-                "content": "Hey — ask me anything about the Big Book or the 12&12. I’ll stay grounded in your corpus and include sources at the end.",
-            }
-        ]
-        st.session_state._trigger_daily = False
-        st.rerun()
+# Main chat “card”
+st.markdown('<div class="bb-card">', unsafe_allow_html=True)
+st.markdown('<div class="bb-hint">Type below and press Enter to send. Use <b>Daily Reflection</b> for a quick grounded check-in.</div>', unsafe_allow_html=True)
 
-st.markdown('<div class="bb-divider"></div>', unsafe_allow_html=True)
+# Render chat history
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
 
-# Chat wrapper (centered card)
-st.markdown('<div class="bb-chat-wrap">', unsafe_allow_html=True)
-st.markdown('<div class="bb-hint">Type below and press Enter to send.</div>', unsafe_allow_html=True)
+# Controls under the thread (Daily Reflection button)
+c1, c2 = st.columns([1, 2], gap="small")
+with c1:
+    daily_clicked = st.button("Daily Reflection", use_container_width=True)
+with c2:
+    clear_clicked = st.button("Clear on-screen", use_container_width=True)
 
-# Render history
-for m in st.session_state.messages:
-    with st.chat_message(m["role"]):
-        st.markdown(safe_text(m["content"]))
+if clear_clicked:
+    # Clears UI only; DB remains (so you can reload if you want later)
+    st.session_state.messages = []
+    st.rerun()
+
+# Chat input (true chat box)
+prompt = st.chat_input("Message…")
+
+# If Daily Reflection clicked, treat it like a user prompt
+if daily_clicked:
+    prompt = (
+        "Give me today’s AA Daily Reflection style guidance grounded only in the Big Book and 12&12 excerpts you have. "
+        "Keep it short, practical, and end with Sources."
+    )
+
+# Handle a new prompt
+if prompt and prompt.strip():
+    user_text = prompt.strip()
+
+    # Add user message to UI + DB
+    st.session_state.messages.append({"role": "user", "content": user_text})
+    _append_message(st.session_state.chat_session_id, "user", user_text)
+
+    with st.chat_message("user"):
+        st.markdown(user_text)
+
+    # Assistant response with “thinking…”
+    with st.chat_message("assistant"):
+        with st.spinner("Thinking…"):
+            answer = ask(user_text, filters=None, top_k=10)
+        st.markdown(answer)
+
+    st.session_state.messages.append({"role": "assistant", "content": answer})
+    _append_message(st.session_state.chat_session_id, "assistant", answer)
 
 st.markdown("</div>", unsafe_allow_html=True)
 
-# ----------------------------
-# Input + Actions
-# ----------------------------
-user_msg = st.chat_input("Message… (e.g., What does AA say about fear?)")
-
-# Daily Reflection triggered by button (above) — runs as if user asked it
-if st.session_state.get("_trigger_daily"):
-    user_msg = (
-        "Give me today’s AA Daily Reflection style guidance grounded only in the Big Book and 12&12 excerpts you have. "
-        "Keep it short, practical, and include sources."
-    )
-    st.session_state._trigger_daily = False
-
-if user_msg:
-    st.session_state.messages.append({"role": "user", "content": user_msg})
-
-    # Show assistant "thinking" bubble immediately
-    with st.chat_message("assistant"):
-        thinking = st.empty()
-        thinking.markdown("Thinking…")
-
-        try:
-            result = ask(user_msg, filters=None, top_k=10)
-            result = normalize_sources(result)
-        except Exception as e:
-            result = (
-                "I hit an error while answering.\n\n"
-                f"Details: {e}"
-            )
-
-        thinking.empty()
-        st.markdown(safe_text(result))
-
-    st.session_state.messages.append({"role": "assistant", "content": result})
