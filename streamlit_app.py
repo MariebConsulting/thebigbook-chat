@@ -31,7 +31,7 @@ PALETTE = {
     "accent": "#2E3A34",      # deep pine-charcoal
     "accent2": "#A45A3C",     # warm clay (sparingly)
 
-    # Chat bubbles (added these - they were missing!)
+    # Chat bubbles
     "user_bg": "rgba(164,90,60,0.12)",
     "asst_bg": "rgba(255,255,255,0.88)",
 
@@ -44,7 +44,7 @@ PALETTE = {
     "d_border": "rgba(244,240,232,0.14)",
     "d_accent": "#B9C3B8",    # muted sage-gray
     
-    # Dark chat bubbles (added these too!)
+    # Dark chat bubbles
     "d_user_bg": "rgba(185,195,184,0.16)",
     "d_asst_bg": "rgba(26,24,22,0.94)",
 }
@@ -126,7 +126,7 @@ def _new_chat_session():
 
 
 # ============================
-# Session state initialization (MUST BE BEFORE ANY ACCESS)
+# Session state initialization
 # ============================
 if "dark" not in st.session_state:
     st.session_state.dark = False
