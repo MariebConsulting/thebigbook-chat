@@ -1,6 +1,5 @@
 import os
 import json
-import re
 from datetime import date
 from pathlib import Path
 from typing import Dict, Any, List, Optional
@@ -12,7 +11,7 @@ try:
 except Exception:
     pass
 
-# Streamlit secrets (available on Cloud)
+# Streamlit secrets (available on Cloud). Safe to import-guard.
 def _get_secret(name: str) -> Optional[str]:
     try:
         import streamlit as st  # type: ignore
@@ -22,16 +21,15 @@ def _get_secret(name: str) -> Optional[str]:
         return None
 
 from openai import OpenAI
+
 from app.rag.vectorstore import LanceVectorStore
 from scripts.ingest_manifest import embed_many  # must respect EMBED_PROVIDER
 
 # -------------------------
-# OpenAI config
+# OpenAI (answer synthesis only)
 # -------------------------
 OPENAI_MODEL = os.getenv("CHAT_MODEL", "gpt-4o-mini").strip()
 DAILY_BUDGET_USD = float(os.getenv("DAILY_BUDGET_USD", "1.00"))
-PER_CALL_USD = float(os.getenv("PER_CALL_USD", "0.01"))
-
 COST_LEDGER_PATH = Path("./db/cost_ledger.json")
 
 def _require_openai_key() -> str:
@@ -46,15 +44,13 @@ def _require_openai_key() -> str:
             '  $Env:OPENAI_API_KEY = "sk-..."\n\n'
             "Streamlit Cloud:\n"
             "  App → Settings → Secrets\n"
-            "  OPENAI_API_KEY = \"sk-...\""
+            "  Add:\n"
+            '  OPENAI_API_KEY = "sk-..."\n'
         )
     return key
 
 client = OpenAI(api_key=_require_openai_key())
 
-# -------------------------
-# Cost ledger
-# -------------------------
 def _ledger() -> Dict[str, Any]:
     if COST_LEDGER_PATH.exists():
         try:
@@ -75,7 +71,8 @@ def _check_budget_or_raise() -> None:
     spent = float(led.get(_today_key(), 0.0))
     if spent >= DAILY_BUDGET_USD:
         raise RuntimeError(
-            f"Daily budget exceeded: spent=${spent:.4f}, limit=${DAILY_BUDGET_USD:.4f}"
+            f"Daily budget exceeded: spent=${spent:.4f} limit=${DAILY_BUDGET_USD:.4f}. "
+            f"Increase DAILY_BUDGET_USD or wait until tomorrow."
         )
 
 def _record_spend(usd: float) -> None:
@@ -84,43 +81,21 @@ def _record_spend(usd: float) -> None:
     led[k] = float(led.get(k, 0.0)) + float(usd)
     _save_ledger(led)
 
-# -------------------------
-# Formatting helper
-# -------------------------
-def _finalize_answer(text: str) -> str:
-    """
-    - Remove model-y language
-    - Move citations to a clean Sources section
-    """
-    if not text:
-        return text
+PER_CALL_USD = float(os.getenv("PER_CALL_USD", "0.01"))
 
-    banned = [
-        "excerpts", "excerpt", "evidence", "blocks", "block",
-        "context", "retrieval", "database", "provided sources"
-    ]
-    cleaned = text
-    for b in banned:
-        cleaned = re.sub(rf"\b{b}\b", "", cleaned, flags=re.IGNORECASE)
-
-    # extract [cite] blocks
-    cites = re.findall(r"\[([^\[\]]+?)\]", cleaned)
-    body = re.sub(r"\s*\[[^\[\]]+?\]\s*", " ", cleaned).strip()
-    body = re.sub(r"[ \t]+", " ", body)
-
+def _format_sources(used: List[str]) -> str:
+    used = [u.strip() for u in used if u and u.strip()]
+    # Deduplicate while preserving order
     seen = set()
-    uniq = []
-    for c in cites:
-        c = c.strip()
-        if c and c not in seen:
-            seen.add(c)
-            uniq.append(c)
-
-    if not uniq:
-        return body
-
-    sources = "\n".join([f"- [{c}]" for c in uniq])
-    return f"{body}\n\nSources:\n{sources}"
+    ordered = []
+    for u in used:
+        if u not in seen:
+            seen.add(u)
+            ordered.append(u)
+    if not ordered:
+        return ""
+    lines = "\n".join([f"- {u}" for u in ordered])
+    return f"\n\nSources:\n{lines}"
 
 # -------------------------
 # Answer synthesis
@@ -128,33 +103,38 @@ def _finalize_answer(text: str) -> str:
 def synthesize_with_mini(question: str, hits: List[Any]) -> str:
     _check_budget_or_raise()
 
-    # Build minimal grounding packet (internal only)
-    sources_payload = []
+    evidence = []
+    cite_list = []
     for h in hits[:8]:
-        sources_payload.append({
-            "cite": h.cite,
-            "text": (h.text or "")[:900]
+        cite = getattr(h, "cite", "") or ""
+        cite_list.append(cite)
+        evidence.append({
+            "cite": cite,
+            "text": (getattr(h, "text", "") or "")[:900]
         })
 
-    system = (
-        "You are a warm, grounded AA companion.\n\n"
-        "Speak naturally and conversationally, as if helping someone face-to-face. "
-        "Be calm, encouraging, and practical.\n\n"
-        "Rules:\n"
-        "- Use ONLY the provided source material.\n"
-        "- If the sources don’t support something, say: "
-        "'I don’t have that in my sources right now.'\n"
-        "- Do NOT mention excerpts, blocks, databases, or retrieval.\n\n"
-        "Citations:\n"
-        "- Do not put citations inline.\n"
-        "- End with a section titled exactly: 'Sources:'\n"
-        "- List each source as a bullet using the provided citation strings.\n"
-    )
+system = (
+    "You are a warm, grounded AA Big Book / 12&12 assistant.\n"
+    "Your job is to help the user in a natural, conversational way — like a good sponsor-friend.\n\n"
+    "Rules:\n"
+    "1) Ground your answer primarily in the provided excerpts. Quote or paraphrase them naturally.\n"
+    "2) You may add context, practical examples, or gentle insights that complement the literature "
+    "if it helps the user — but make it clear when you're doing so.\n"
+    "3) If the excerpts don't fully address something, acknowledge that and offer what you can.\n"
+    "4) Do NOT put citations in the body of your answer.\n"
+    "5) End your response with a section titled exactly: 'Sources:' followed by a flat bullet list.\n"
+    "   Each bullet must be one of the provided cite strings, exactly as given.\n"
+    "   No nested bullets. No extra commentary in the Sources section.\n\n"
+    "Style:\n"
+    "- Be human. Be kind. Short paragraphs. Practical.\n"
+    "- Prefer 4–10 sentences unless the user asks for depth.\n"
+    "- Avoid sterile outlines unless the user asks for a list.\n"
+    "- When adding context beyond the excerpts, use phrases like 'Many people find...' or "
+    "'In practice...' to signal you're offering broader perspective.\n"
+)
 
-    user = {
-        "question": question,
-        "sources": sources_payload
-    }
+
+    user = {"question": question, "excerpts": evidence}
 
     resp = client.responses.create(
         model=OPENAI_MODEL,
@@ -166,25 +146,30 @@ def synthesize_with_mini(question: str, hits: List[Any]) -> str:
     )
 
     _record_spend(PER_CALL_USD)
-    return _finalize_answer(resp.output_text.strip())
 
-# -------------------------
-# Public entry
-# -------------------------
+    text = (resp.output_text or "").strip()
+
+    # If the model forgot Sources, append best-effort from retrieved hits
+    if "Sources:" not in text:
+        text = text.rstrip() + _format_sources(cite_list)
+    else:
+        # Clean up: remove duplicate "Sources:" sections if it hallucinated multiples
+        parts = text.split("Sources:")
+        if len(parts) > 2:
+            text = parts[0].rstrip() + "\n\nSources:" + parts[-1].lstrip()
+
+    return text.strip()
+
 def ask(question: str, filters: Optional[Dict[str, Any]] = None, top_k: int = 10) -> str:
     store = LanceVectorStore()
-    vector = embed_many([question])[0]
-    hits = store.query(vector, top_k=top_k, filters=filters)
+    v = embed_many([question])[0]
+    hits = store.query(v, top_k=top_k, filters=filters)
 
     if not hits:
-        return (
-            "I don’t see anything in the Big Book or the Twelve & Twelve "
-            "that directly speaks to that question yet."
-        )
+        return "I couldn’t find a relevant passage in the current corpus for that question.\n\nSources:\n- (no matches)"
 
     return synthesize_with_mini(question, hits)
 
 if __name__ == "__main__":
-    q = os.getenv("Q", "").strip() or "How does AA describe fear?"
-    print(ask(q))
-
+    q = os.getenv("Q", "").strip() or "How does AA describe Step One?"
+    print(ask(q, filters=None, top_k=10))
