@@ -11,27 +11,42 @@ import pyarrow as pa
 
 from scripts.smoke_ask import ask
 
-st.set_page_config(
-    page_title="The Big Book .chat",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
+st.set_page_config(page_title="The Big Book .chat", layout="wide")
 
 # ============================
-# Dark modern palette
+# Modern dark palette (charcoal + foggy dew) — NO blue, NO AA vibes
 # ============================
 PALETTE = {
-    "bg": "#0A0A0A",           # deep black
-    "bg2": "#121212",          # slightly lighter
-    "card": "#1A1A1A",         # dark card
-    "text": "#E8E8E8",         # bright text
-    "muted": "#999999",        # muted text
-    "border": "#2A2A2A",       # subtle border
-    "accent": "#FF6B35",       # warm orange accent
-    "accent_hover": "#FF8C61", # lighter orange
-    "input_bg": "#242424",     # input background
-    "user_bubble": "#2A2A2A",  # user message
-    "asst_bubble": "#1A1A1A",  # assistant message
+    # App background (charcoal)
+    "bg": "#121416",
+    "bg2": "#1A1D20",
+
+    # Cards / panels (foggy dew)
+    "card": "#DDE3DB",
+    "card2": "#F1F4EE",
+
+    # Text
+    "text": "#0E0F10",          # on foggy dew
+    "text_on_dark": "#ECEFF1",  # on charcoal
+    "muted_on_dark": "rgba(236,239,241,0.70)",
+    "muted_on_card": "rgba(14,15,16,0.62)",
+
+    # Borders / shadows
+    "border_on_card": "rgba(0,0,0,0.10)",
+    "border_on_dark": "rgba(236,239,241,0.10)",
+    "shadow": "0 12px 40px rgba(0,0,0,0.35)",
+
+    # Accents (subtle, no blue)
+    "accent": "#8E9A91",   # sage gray
+    "accent2": "#B08A6A",  # warm clay
+
+    # Chat bubbles
+    "user_bg": "#E6EBE3",
+    "asst_bg": "#F1F4EE",
+
+    # Tagline pill
+    "pill_bg": "#1E2125",
+    "pill_text": "#ECEFF1",
 }
 
 # ============================
@@ -55,10 +70,12 @@ def _ensure_chat_table():
     schema = pa.schema([
         pa.field("session_id", pa.string()),
         pa.field("ts", pa.timestamp("ms")),
-        pa.field("role", pa.string()),
+        pa.field("role", pa.string()),  # "user" | "assistant"
         pa.field("content", pa.string()),
     ])
 
+    # Some LanceDB versions choke on create_table(data=[], schema=...).
+    # Create with a dummy row, then delete it if supported.
     dummy = [{
         "session_id": "init",
         "ts": datetime.now(timezone.utc),
@@ -96,261 +113,183 @@ def _append_message(session_id: str, role: str, content: str) -> None:
     }])
 
 
+def _reset_screen_only():
+    # Clears current UI memory, keeps DB history intact.
+    st.session_state.messages = []
+
+
 def _new_chat_session():
+    # New session id = new persistent thread
     st.session_state.chat_session_id = str(uuid.uuid4())
     st.session_state.messages = []
 
 
 # ============================
-# Session state initialization
+# Session state init (MUST come before any access)
 # ============================
 if "chat_session_id" not in st.session_state:
     st.session_state.chat_session_id = str(uuid.uuid4())
 
 if "messages" not in st.session_state:
-    st.session_state.messages = _load_messages(
-        st.session_state.chat_session_id,
-        limit=400
+    st.session_state.messages = _load_messages(st.session_state.chat_session_id, limit=400)
+
+# Seed a warm welcome if this is a new session
+if not st.session_state.messages:
+    welcome = (
+        "Hey — I’m here with you.\n\n"
+        "Ask me anything about the Big Book or the Twelve & Twelve. "
+        "I’ll stay grounded in the text and list sources at the end."
     )
-
-    if not st.session_state.messages:
-        welcome = (
-            "Hey.\n\n"
-            "Ask me anything about the Big Book or the Twelve & Twelve. "
-            "I'll stay grounded in the text and cite sources."
-        )
-        st.session_state.messages = [
-            {"role": "assistant", "content": welcome}
-        ]
-
+    st.session_state.messages = [{"role": "assistant", "content": welcome}]
+    _append_message(st.session_state.chat_session_id, "assistant", welcome)
 
 # ============================
-# CSS - Dark, mobile-first
+# CSS (mobile-first, darker, readable)
 # ============================
 CSS = f"""
 <style>
-/* Hide Streamlit UI elements */
+/* Hide Streamlit chrome */
 #MainMenu {{visibility: hidden;}}
 footer {{visibility: hidden;}}
 header {{visibility: hidden;}}
-.stDeployButton {{display: none;}}
 
-/* Container */
+/* Layout */
 .block-container {{
-  padding: 12px 16px 80px 16px;
-  max-width: 100%;
+  padding-top: 18px;
+  max-width: 980px;
 }}
 
-/* Dark background */
+/* App background */
 .stApp {{
-  background: {PALETTE["bg"]};
-  color: {PALETTE["text"]};
-}}
-
-/* All text white */
-h1, h2, h3, p, label, span, div {{
-  color: {PALETTE["text"]} !important;
+  background: radial-gradient(1200px 600px at 20% 0%,
+    {PALETTE["bg2"]} 0%,
+    {PALETTE["bg"]} 60%,
+    #0D0F11 100%);
+  color: {PALETTE["text_on_dark"]};
 }}
 
 /* Header */
-.bb-header {{
-  text-align: center;
-  padding: 20px 0 12px 0;
-  border-bottom: 1px solid {PALETTE["border"]};
-  margin-bottom: 16px;
+.bb-top {{
+  margin-bottom: 10px;
 }}
-
 .bb-title {{
-  font-size: 32px;
+  font-size: 40px;
   font-weight: 900;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
   margin: 0;
-  color: {PALETTE["text"]};
 }}
-
-/* Tagline card */
-.bb-tagline {{
-  background: {PALETTE["card"]};
-  border: 1px solid {PALETTE["border"]};
-  border-radius: 12px;
-  padding: 12px 16px;
-  margin: 12px 0 16px 0;
+.bb-sub {{
+  margin-top: 6px;
   font-size: 14px;
-  color: {PALETTE["muted"]};
-  text-align: center;
+  color: {PALETTE["muted_on_dark"]};
 }}
 
-/* Chat input at top - make it look good */
-div[data-testid="stChatInput"] {{
-  position: fixed;
-  top: 140px;
-  left: 0;
-  right: 0;
-  z-index: 999;
-  padding: 0 16px 12px 16px;
-  background: {PALETTE["bg"]};
-  border-bottom: 1px solid {PALETTE["border"]};
+/* Tagline pill */
+.bb-pill {{
+  display:inline-block;
+  background: {PALETTE["pill_bg"]};
+  color: {PALETTE["pill_text"]};
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  margin-top: 10px;
+  margin-bottom: 12px;
+  border: 1px solid {PALETTE["border_on_dark"]};
 }}
 
-div[data-testid="stChatInput"] > div {{
-  border-radius: 12px !important;
-  border: 1px solid {PALETTE["border"]} !important;
-  background: {PALETTE["input_bg"]} !important;
+/* Chat card/panel */
+.bb-card {{
+  border: 1px solid {PALETTE["border_on_dark"]};
+  background: rgba(0,0,0,0.18);
+  border-radius: 18px;
+  padding: 12px;
+  box-shadow: {PALETTE["shadow"]};
 }}
 
-div[data-testid="stChatInput"] textarea {{
-  color: {PALETTE["text"]} !important;
-  font-size: 16px !important;
-  border-radius: 12px !important;
-}}
-
-div[data-testid="stChatInput"] textarea::placeholder {{
-  color: {PALETTE["muted"]} !important;
-}}
-
-/* Buttons below input */
-.bb-controls {{
-  position: fixed;
-  top: 200px;
-  left: 0;
-  right: 0;
-  z-index: 998;
-  display: flex;
-  gap: 8px;
-  padding: 0 16px 12px 16px;
-  background: {PALETTE["bg"]};
-  border-bottom: 1px solid {PALETTE["border"]};
-}}
-
-.bb-controls .stButton > button {{
-  width: 100%;
-  background: {PALETTE["card"]} !important;
-  border: 1px solid {PALETTE["border"]} !important;
-  border-radius: 10px !important;
-  color: {PALETTE["text"]} !important;
-  font-weight: 700 !important;
-  font-size: 14px !important;
-  padding: 10px 12px !important;
-  transition: all 0.2s !important;
-}}
-
-.bb-controls .stButton > button:hover {{
-  background: {PALETTE["accent"]} !important;
-  border-color: {PALETTE["accent"]} !important;
-}}
-
-/* Chat area - add top padding for fixed elements */
+/* Chat scroll area */
 .bb-chat {{
-  margin-top: 120px;
-  padding-bottom: 20px;
+  margin-top: 6px;
+  padding: 2px 2px 10px 2px;
 }}
 
-/* Chat messages */
-div[data-testid="stChatMessage"] {{
-  background: transparent !important;
-  border: none !important;
-  padding: 8px 0 !important;
-}}
-
-/* Message bubbles */
+/* Bubbles (we render inside st.chat_message containers) */
 .bb-bubble {{
   border-radius: 16px;
-  padding: 14px 16px;
-  line-height: 1.6;
-  font-size: 15px;
-  margin: 4px 0;
-  word-wrap: break-word;
+  padding: 14px 14px;
+  line-height: 1.55;
+  border: 1px solid {PALETTE["border_on_card"]};
+  white-space: pre-wrap;
+  color: {PALETTE["text"]};
 }}
-
 .bb-user {{
-  background: {PALETTE["user_bubble"]};
-  border: 1px solid {PALETTE["border"]};
-  margin-left: 20px;
+  background: {PALETTE["user_bg"]};
 }}
-
 .bb-assistant {{
-  background: {PALETTE["asst_bubble"]};
-  border: 1px solid {PALETTE["border"]};
-  margin-right: 20px;
+  background: {PALETTE["asst_bg"]};
 }}
 
 /* Sources */
-.bb-sources {{
-  margin-top: 12px;
-  padding: 12px;
-  background: {PALETTE["bg2"]};
-  border-radius: 10px;
-  border: 1px solid {PALETTE["border"]};
-}}
-
 .bb-sources-title {{
-  font-weight: 700;
-  font-size: 13px;
-  color: {PALETTE["accent"]};
-  margin-bottom: 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  margin-top: 12px;
+  font-weight: 900;
+  color: {PALETTE["text"]};
 }}
-
 .bb-sources ul {{
-  margin: 0;
-  padding-left: 20px;
-  list-style: none;
+  margin: 8px 0 0 18px;
 }}
-
 .bb-sources li {{
-  font-size: 13px;
-  color: {PALETTE["muted"]};
   margin: 6px 0;
-  position: relative;
-  padding-left: 12px;
+  color: {PALETTE["text"]};
 }}
 
-.bb-sources li:before {{
-  content: "→";
-  position: absolute;
-  left: 0;
-  color: {PALETTE["accent"]};
+/* Input strip (above buttons) */
+.bb-composer {{
+  background: {PALETTE["card"]};
+  border: 1px solid {PALETTE["border_on_card"]};
+  border-radius: 16px;
+  padding: 12px;
+  margin-top: 10px;
+}}
+.bb-hint {{
+  font-size: 13px;
+  color: {PALETTE["muted_on_card"]};
+  margin: 0 0 10px 2px;
 }}
 
-/* Spinner */
-div[data-testid="stSpinner"] > div {{
-  border-color: {PALETTE["accent"]} transparent transparent transparent !important;
+/* Text input styling */
+div[data-testid="stTextInput"] > div {{
+  border-radius: 14px !important;
+  background: {PALETTE["card2"]} !important;
+  border: 1px solid {PALETTE["border_on_card"]} !important;
+  box-shadow: none !important;
+}}
+div[data-testid="stTextInput"] input {{
+  padding: 14px 14px !important;
+  font-size: 16px !important;
+  color: {PALETTE["text"]} !important;
+}}
+div[data-testid="stTextInput"] label {{
+  display:none !important;
 }}
 
-/* Mobile optimizations */
-@media (max-width: 768px) {{
-  .bb-title {{
-    font-size: 28px;
-  }}
-  
-  .bb-controls {{
-    flex-direction: column;
-  }}
-  
-  div[data-testid="stChatInput"] {{
-    top: 120px;
-  }}
-  
-  .bb-controls {{
-    top: 175px;
-  }}
-  
-  .bb-chat {{
-    margin-top: 100px;
-  }}
+/* Buttons */
+div.stButton > button {{
+  width: 100%;
+  border-radius: 14px;
+  padding: 12px 14px;
+  border: 1px solid {PALETTE["border_on_card"]};
+  background: {PALETTE["card2"]};
+  font-weight: 900;
+  color: {PALETTE["text"]};
+}}
+div.stButton > button:hover {{
+  transform: translateY(-1px);
 }}
 
-/* Very small screens */
-@media (max-width: 400px) {{
-  .bb-title {{
-    font-size: 24px;
-  }}
-  
-  .bb-bubble {{
-    font-size: 14px;
-    padding: 12px 14px;
-  }}
+/* Make chat message containers less "Streamlit-y" */
+section[data-testid="stChatMessage"] {{
+  padding: 0.25rem 0 !important;
 }}
 </style>
 """
@@ -361,42 +300,21 @@ st.markdown(CSS, unsafe_allow_html=True)
 # ============================
 st.markdown(
     """
-<div class="bb-header">
+<div class="bb-top">
   <div class="bb-title">The Big Book .chat</div>
+  <div class="bb-sub">Warm guidance, grounded in the text.</div>
+  <div class="bb-pill">Sources are listed at the bottom of each answer.</div>
 </div>
 """,
     unsafe_allow_html=True,
 )
 
-# Tagline in bubble
-st.markdown(
-    '<div class="bb-tagline">Warm guidance, grounded in the text. Sources at the bottom.</div>',
-    unsafe_allow_html=True,
-)
+# ============================
+# Main panel: chat + composer + actions
+# ============================
+st.markdown('<div class="bb-card">', unsafe_allow_html=True)
 
-# ============================
-# Chat input at TOP
-# ============================
-user_text = st.chat_input("Message…")
-
-# ============================
-# Control buttons below input
-# ============================
-st.markdown('<div class="bb-controls">', unsafe_allow_html=True)
-col1, col2 = st.columns(2)
-with col1:
-    daily_clicked = st.button("📖 Daily Reflection", use_container_width=True)
-with col2:
-    new_thread = st.button("✨ New Chat", use_container_width=True)
-st.markdown('</div>', unsafe_allow_html=True)
-
-if new_thread:
-    _new_chat_session()
-    st.rerun()
-
-# ============================
-# Chat history
-# ============================
+# --- Render chat history ---
 st.markdown('<div class="bb-chat">', unsafe_allow_html=True)
 
 for m in st.session_state.messages:
@@ -404,14 +322,15 @@ for m in st.session_state.messages:
     content = m.get("content", "")
 
     if role == "user":
-        with st.chat_message("user", avatar="💭"):
+        with st.chat_message("user", avatar="🧑"):
             st.markdown(
                 f'<div class="bb-bubble bb-user">{html.escape(content)}</div>',
                 unsafe_allow_html=True
             )
     else:
-        # Split answer vs Sources
         raw = content.strip()
+
+        # Split answer vs Sources section (prevents nested bullet weirdness)
         if "\nSources:" in raw:
             body, sources = raw.split("\nSources:", 1)
             sources_lines = [s.strip() for s in sources.splitlines() if s.strip()]
@@ -423,11 +342,10 @@ for m in st.session_state.messages:
             sources_lines = []
 
         with st.chat_message("assistant", avatar="🍂"):
-            if body:
-                st.markdown(
-                    f'<div class="bb-bubble bb-assistant">{html.escape(body.strip())}</div>',
-                    unsafe_allow_html=True
-                )
+            st.markdown(
+                f'<div class="bb-bubble bb-assistant">{html.escape(body.strip())}</div>',
+                unsafe_allow_html=True
+            )
 
             if sources_lines:
                 cleaned = []
@@ -436,22 +354,47 @@ for m in st.session_state.messages:
                     if line:
                         cleaned.append(line)
 
-                sources_html = '<div class="bb-sources">'
-                sources_html += '<div class="bb-sources-title">Sources</div>'
-                sources_html += '<ul>' + "".join(
-                    f"<li>{html.escape(x)}</li>" for x in cleaned
-                ) + '</ul></div>'
-                st.markdown(sources_html, unsafe_allow_html=True)
+                st.markdown('<div class="bb-sources-title">Sources:</div>', unsafe_allow_html=True)
+                st.markdown(
+                    '<div class="bb-sources"><ul>'
+                    + "".join(f"<li>{html.escape(x)}</li>" for x in cleaned)
+                    + "</ul></div>",
+                    unsafe_allow_html=True
+                )
 
-st.markdown("</div>", unsafe_allow_html=True)
+st.markdown("</div>", unsafe_allow_html=True)  # bb-chat
 
-# ============================
-# Handle input
-# ============================
+# --- Composer (INPUT ABOVE BUTTONS) ---
+st.markdown('<div class="bb-composer">', unsafe_allow_html=True)
+st.markdown('<div class="bb-hint">Type your message and press <b>Send</b>.</div>', unsafe_allow_html=True)
+
+with st.form("composer_form", clear_on_submit=True):
+    c1, c2 = st.columns([5, 2], gap="small")
+    with c1:
+        user_text = st.text_input("Message", placeholder="Ask about fear, resentment, Step One…")
+    with c2:
+        send_clicked = st.form_submit_button("Send", use_container_width=True)
+
+st.markdown("</div>", unsafe_allow_html=True)  # bb-composer
+
+# --- Actions row (below input) ---
+b1, b2, b3 = st.columns(3, gap="small")
+with b1:
+    daily_clicked = st.button("Daily Reflection", use_container_width=True)
+with b2:
+    new_thread = st.button("New chat thread", use_container_width=True)
+with b3:
+    clear_clicked = st.button("Clear on-screen", use_container_width=True)
+
+st.markdown("</div>", unsafe_allow_html=True)  # bb-card
+
+
 def _run_query(prompt: str):
+    # persist user message
     st.session_state.messages.append({"role": "user", "content": prompt})
     _append_message(st.session_state.chat_session_id, "user", prompt)
 
+    # assistant response (with thinking)
     with st.spinner("Thinking…"):
         reply = ask(prompt, filters=None, top_k=10)
 
@@ -459,12 +402,24 @@ def _run_query(prompt: str):
     _append_message(st.session_state.chat_session_id, "assistant", reply)
     st.rerun()
 
+
+# Buttons / actions
+if clear_clicked:
+    _reset_screen_only()
+    st.rerun()
+
+if new_thread:
+    _new_chat_session()
+    st.rerun()
+
 if daily_clicked:
     daily_prompt = (
-        "Give me today's AA Daily Reflection style guidance grounded only in the Big Book and 12&12 excerpts you have. "
+        "Give me today's Daily Reflection style guidance grounded only in the Big Book and 12&12 excerpts you have. "
         "Keep it short, practical, and cite sources."
     )
     _run_query(daily_prompt)
 
-if user_text and user_text.strip():
+# Send
+if send_clicked and user_text and user_text.strip():
     _run_query(user_text.strip())
+
