@@ -31,6 +31,10 @@ PALETTE = {
     "accent": "#2E3A34",      # deep pine-charcoal
     "accent2": "#A45A3C",     # warm clay (sparingly)
 
+    # Chat bubbles (added these - they were missing!)
+    "user_bg": "rgba(164,90,60,0.12)",
+    "asst_bg": "rgba(255,255,255,0.88)",
+
     # Dark mode (espresso + ink)
     "d_bg": "#11100F",
     "d_bg2": "#1A1816",
@@ -39,6 +43,10 @@ PALETTE = {
     "d_muted": "rgba(244,240,232,0.68)",
     "d_border": "rgba(244,240,232,0.14)",
     "d_accent": "#B9C3B8",    # muted sage-gray
+    
+    # Dark chat bubbles (added these too!)
+    "d_user_bg": "rgba(185,195,184,0.16)",
+    "d_asst_bg": "rgba(26,24,22,0.94)",
 }
 
 # ============================
@@ -117,13 +125,8 @@ def _new_chat_session():
     st.session_state.messages = []
 
 
-# Load persisted chat once per run (only if local state is empty)
-if not st.session_state.messages:
-    st.session_state.messages = _load_messages(st.session_state.chat_session_id, limit=400)
-
-
 # ============================
-# Session state
+# Session state initialization (MUST BE BEFORE ANY ACCESS)
 # ============================
 if "dark" not in st.session_state:
     st.session_state.dark = False
@@ -143,7 +146,7 @@ if "messages" not in st.session_state:
         welcome = (
             "Hey.\n\n"
             "Ask me anything about the Big Book or the Twelve & Twelve. "
-            "I’ll stay grounded in the text and list sources at the end."
+            "I'll stay grounded in the text and list sources at the end."
         )
         st.session_state.messages = [
             {"role": "assistant", "content": welcome}
@@ -391,14 +394,16 @@ with c1:
 with c2:
     clear_clicked = st.button("Clear on-screen", use_container_width=True)
 with c3:
-    # small “thread” control without cluttering the top
+    # small "thread" control without cluttering the top
     new_thread = st.button("New chat thread", use_container_width=True)
 
 if clear_clicked:
     _reset_screen_only()
+    st.rerun()
 
 if new_thread:
     _new_chat_session()
+    st.rerun()
 
 # ============================
 # Render chat history
@@ -466,10 +471,9 @@ def _run_query(prompt: str):
     st.session_state.messages.append({"role": "user", "content": prompt})
     _append_message(st.session_state.chat_session_id, "user", prompt)
 
-    # assistant response (with “thinking”)
-    with st.chat_message("assistant", avatar="🍂"):
-        with st.spinner("Thinking…"):
-            reply = ask(prompt, filters=None, top_k=10)
+    # assistant response (with "thinking")
+    with st.spinner("Thinking…"):
+        reply = ask(prompt, filters=None, top_k=10)
 
     st.session_state.messages.append({"role": "assistant", "content": reply})
     _append_message(st.session_state.chat_session_id, "assistant", reply)
@@ -477,12 +481,10 @@ def _run_query(prompt: str):
 
 if daily_clicked:
     daily_prompt = (
-        "Give me today’s AA Daily Reflection style guidance grounded only in the Big Book and 12&12 excerpts you have. "
+        "Give me today's AA Daily Reflection style guidance grounded only in the Big Book and 12&12 excerpts you have. "
         "Keep it short, practical, and cite sources."
     )
     _run_query(daily_prompt)
 
 if user_text and user_text.strip():
     _run_query(user_text.strip())
-
-
