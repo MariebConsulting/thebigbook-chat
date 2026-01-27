@@ -57,7 +57,22 @@ if "chat_session_id" not in st.session_state:
     st.session_state.chat_session_id = str(uuid.uuid4())
 
 if "messages" not in st.session_state:
-    st.session_state.messages = []  # List[{"role": "user"|"assistant", "content": str}]
+    # Load prior messages from LanceDB (if any)
+    st.session_state.messages = _load_messages(
+        st.session_state.chat_session_id,
+        limit=400
+    )
+
+    # Seed a warm welcome if this is a new session
+    if not st.session_state.messages:
+        welcome = (
+            "Hey.\n\n"
+            "Ask me anything about the Big Book or the Twelve & Twelve. "
+            "I’ll stay grounded in the text and list sources at the end."
+        )
+        st.session_state.messages = [
+            {"role": "assistant", "content": welcome}
+        ]
 
 # ============================
 # LanceDB chat storage
