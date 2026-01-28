@@ -14,7 +14,7 @@ from scripts.smoke_ask import ask
 st.set_page_config(page_title="The Big Book .chat", layout="wide")
 
 # ============================
-# Look: light background, BLACK text (mobile-first)
+# Light background + BLACK text (mobile-first)
 # ============================
 PALETTE = {
     "page_bg": "#F4F5F2",
@@ -25,11 +25,13 @@ PALETTE = {
     "shadow": "0 12px 38px rgba(0,0,0,0.08)",
 
     # bubbles
-    "user_bg": "#F3F1FF",   # subtle lavender tint (not “AA blue”)
+    "user_bg": "#F3F1FF",
     "asst_bg": "#FFFFFF",
 
     # controls
     "btn_bg": "#FFFFFF",
+    "btn_text": "#000000",
+    "btn_border": "rgba(0,0,0,0.16)",
     "btn_hover": "#F2F2F2",
 }
 
@@ -58,7 +60,6 @@ def _ensure_chat_table():
         pa.field("content", pa.string()),
     ])
 
-    # Some LanceDB versions choke on create_table(data=[], schema=...)
     dummy = [{
         "session_id": "init",
         "ts": datetime.now(timezone.utc),
@@ -116,7 +117,6 @@ if "messages" not in st.session_state:
 if "pending_prompt" not in st.session_state:
     st.session_state.pending_prompt = None
 
-# Seed welcome once per thread
 if not st.session_state.messages:
     welcome = (
         "Hey — ask me anything about the Big Book or the Twelve & Twelve.\n\n"
@@ -126,13 +126,13 @@ if not st.session_state.messages:
     _append_message(st.session_state.chat_session_id, "assistant", welcome)
 
 # ============================
-# CSS (mobile-safe + keep chat_input visible on iOS)
+# CSS (iOS-safe composer + force white buttons)
 # ============================
 CSS = f"""
 <style>
-#MainMenu {{visibility: hidden;}}
-footer {{visibility: hidden;}}
-header {{visibility: hidden;}}
+#MainMenu {{visibility:hidden;}}
+footer {{visibility:hidden;}}
+header {{visibility:hidden;}}
 
 .stApp {{
   background: {PALETTE["page_bg"]};
@@ -141,8 +141,8 @@ header {{visibility: hidden;}}
 
 .block-container {{
   padding-top: 14px;
-  /* IMPORTANT: iOS Safari bottom bar + Streamlit composer */
-  padding-bottom: calc(140px + env(safe-area-inset-bottom));
+  /* MORE room for iOS Safari bottom bar + Streamlit pinned composer */
+  padding-bottom: calc(220px + env(safe-area-inset-bottom));
   max-width: 980px;
 }}
 
@@ -164,9 +164,17 @@ header {{visibility: hidden;}}
   color: {PALETTE["muted"]};
 }}
 
-.bb-pill {{
-  display:inline-block;
+/* pill + menu aligned on one row */
+.bb-pillrow {{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
   margin-top: 10px;
+}}
+
+.bb-pill {{
+  flex: 1;
   padding: 8px 12px;
   border-radius: 999px;
   background: {PALETTE["card_bg"]};
@@ -176,35 +184,34 @@ header {{visibility: hidden;}}
   font-size: 13px;
 }}
 
-.bb-actions {{
-  margin: 10px 0 6px 0;
+/* menu button area */
+.bb-menu {{
+  flex: 0 0 auto;
 }}
 
-.bb-actions .stButton > button {{
-  border-radius: 14px;
-  padding: 10px 12px;
-  border: 1px solid {PALETTE["border"]};
-  background: {PALETTE["btn_bg"]};
-  font-weight: 800;
-  color: {PALETTE["text"]};
-}}
-
-.bb-actions .stButton > button:hover {{
-  background: {PALETTE["btn_hover"]};
-}}
-
-.bb-actions .stPopover > button {{
-  border-radius: 14px !important;
-  padding: 10px 12px !important;
-  border: 1px solid {PALETTE["border"]} !important;
+/* FORCE Streamlit buttons to be white w/ black text (strong selectors) */
+.stButton > button,
+.stButton > button:focus,
+.stButton > button:active,
+.stPopover > button,
+.stPopover > button:focus,
+.stPopover > button:active {{
   background: {PALETTE["btn_bg"]} !important;
+  color: {PALETTE["btn_text"]} !important;
+  border: 1px solid {PALETTE["btn_border"]} !important;
+  border-radius: 14px !important;
   font-weight: 900 !important;
-  color: {PALETTE["text"]} !important;
+  box-shadow: {PALETTE["shadow"]} !important;
 }}
 
+.stButton > button:hover,
+.stPopover > button:hover {{
+  background: {PALETTE["btn_hover"]} !important;
+}}
+
+/* Chat bubbles */
 .bb-chatwrap {{
-  border-radius: 18px;
-  padding: 6px 4px 10px 4px;
+  padding-top: 10px;
 }}
 
 .bb-bubble {{
@@ -241,7 +248,7 @@ header {{visibility: hidden;}}
   color: {PALETTE["text"]};
 }}
 
-/* Chat composer */
+/* Composer */
 div[data-testid="stChatInput"] > div {{
   border-radius: 16px !important;
   border: 1px solid {PALETTE["border"]} !important;
@@ -258,50 +265,35 @@ div[data-testid="stChatInput"] textarea::placeholder {{
   color: rgba(0,0,0,0.35) !important;
 }}
 
-/* Mobile tuning */
 @media (max-width: 480px) {{
   .bb-title {{ font-size: 34px; }}
-  .bb-pill {{ font-size: 12px; }}
 }}
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
 
 # ============================
-# Header
+# Header + pill + menu (top-right)
 # ============================
 st.markdown(
     """
 <div class="bb-header">
   <div class="bb-title">The Big Book .chat</div>
-  <div class="bb-sub">Warm guidance, grounded in the text.</div>
-  <div class="bb-pill">Sources are listed at the bottom of each answer.</div>
+  <div class="bb-sub">Conversation grounded in text</div>
+  <div class="bb-pillrow">
+    <div class="bb-pill">Sources are listed at the bottom of each answer.</div>
+    <div class="bb-menu"></div>
+  </div>
 </div>
 """,
     unsafe_allow_html=True,
 )
 
-# ============================
-# Actions: ONE primary + ⋯ menu (mobile-friendly)
-# ============================
-st.markdown('<div class="bb-actions">', unsafe_allow_html=True)
-a1, a2 = st.columns([6, 1], gap="small")
-
-with a1:
+# Put ALL actions into one menu (top-right)
+with st.popover("⋯", use_container_width=False):
     daily_clicked = st.button("Daily Reflection", use_container_width=True)
-
-with a2:
-    more = st.popover("⋯", use_container_width=True)
-    with more:
-        new_thread = st.button("New chat thread", use_container_width=True)
-        clear_clicked = st.button("Clear on-screen", use_container_width=True)
-
-st.markdown("</div>", unsafe_allow_html=True)
-
-if "clear_clicked" not in locals():
-    clear_clicked = False
-if "new_thread" not in locals():
-    new_thread = False
+    new_thread = st.button("New chat thread", use_container_width=True)
+    clear_clicked = st.button("Clear on-screen", use_container_width=True)
 
 if clear_clicked:
     _reset_screen_only()
@@ -387,7 +379,7 @@ if st.session_state.pending_prompt:
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ============================
-# Input (paper-airplane) — only message entry
+# Input (paper-airplane) — only entry
 # ============================
 user_text = st.chat_input("Message…")
 
@@ -395,7 +387,6 @@ user_text = st.chat_input("Message…")
 def _queue_prompt(prompt: str):
     st.session_state.messages.append({"role": "user", "content": prompt})
     _append_message(st.session_state.chat_session_id, "user", prompt)
-
     st.session_state.pending_prompt = prompt
     st.rerun()
 
@@ -413,4 +404,5 @@ if daily_clicked:
 
 if user_text and user_text.strip():
     _queue_prompt(user_text.strip())
+
 
