@@ -142,17 +142,12 @@ header {{visibility: hidden;}}
     max-width: 100%;
 }}
 
-/* HEADER - Fixed at top */
+/* HEADER - Normal flow */
 .chat-header {{
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
     background: {PALETTE["surface"]};
     border-bottom: 2px solid {PALETTE["accent"]};
-    padding: 16px 20px;
-    z-index: 1000;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    padding: 20px 20px;
+    margin-bottom: 16px;
 }}
 
 .chat-title {{
@@ -170,12 +165,10 @@ header {{visibility: hidden;}}
     margin-top: 4px;
 }}
 
-/* MESSAGES AREA - Scrollable middle section */
+/* MESSAGES AREA - Proper spacing for mobile */
 .messages-container {{
-    margin-top: 100px;
-    margin-bottom: 180px;
-    padding: 16px;
-    min-height: 50vh;
+    padding: 0 16px 240px 16px;
+    min-height: 40vh;
 }}
 
 /* Message bubbles - SUPER readable */
@@ -340,12 +333,16 @@ div[data-testid="stChatInput"] button:hover {{
     }}
     
     .msg-bubble {{
-        max-width: 90%;
+        max-width: 95%;
         font-size: 15px;
     }}
     
     .messages-container {{
-        margin-bottom: 200px;
+        padding-bottom: 280px;
+    }}
+    
+    .input-container {{
+        padding: 12px;
     }}
 }}
 
@@ -410,13 +407,11 @@ user_input = st.chat_input("Type your message here...")
 
 # Action buttons
 st.markdown('<div class="action-buttons">', unsafe_allow_html=True)
-col1, col2, col3 = st.columns(3)
+col1, col2 = st.columns(2)
 with col1:
     daily_btn = st.button("📖 Daily Reflection")
 with col2:
-    new_chat_btn = st.button("✨ New Chat")
-with col3:
-    # Placeholder for future feature
+    # Future feature placeholder
     pass
 st.markdown('</div>', unsafe_allow_html=True)
 
@@ -447,7 +442,3 @@ if user_input:
 
 if daily_btn:
     _process_message("Give me today's Daily Reflection style guidance from the Big Book and 12&12. Keep it short and practical.")
-
-if new_chat_btn:
-    _new_chat()
-    st.rerun()
