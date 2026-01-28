@@ -1,3 +1,4 @@
+
 # streamlit_app.py
 import html
 import os
@@ -422,4 +423,3 @@ if daily_clicked:
 # Send
 if send_clicked and user_text and user_text.strip():
     _run_query(user_text.strip())
-
