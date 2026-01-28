@@ -138,31 +138,34 @@ header {{visibility: hidden;}}
 
 /* Container - mobile first */
 .block-container {{
-    padding: 0;
-    max-width: 100%;
+    padding: 0 !important;
+    max-width: 100% !important;
+    margin-top: 0 !important;
 }}
 
 /* HEADER - Normal flow */
 .chat-header {{
     background: {PALETTE["surface"]};
     border-bottom: 2px solid {PALETTE["accent"]};
-    padding: 20px 20px;
-    margin-bottom: 16px;
+    padding: 24px 20px;
+    margin: 0;
 }}
 
 .chat-title {{
-    font-size: 24px;
+    font-size: 26px;
     font-weight: 800;
     color: {PALETTE["text"]};
     margin: 0;
     text-align: center;
+    line-height: 1.2;
 }}
 
 .chat-subtitle {{
-    font-size: 13px;
+    font-size: 14px;
     color: {PALETTE["text_secondary"]};
     text-align: center;
-    margin-top: 4px;
+    margin-top: 6px;
+    line-height: 1.4;
 }}
 
 /* MESSAGES AREA - Proper spacing for mobile */
@@ -328,8 +331,16 @@ div[data-testid="stChatInput"] button:hover {{
 
 /* Mobile responsive */
 @media (max-width: 768px) {{
+    .chat-header {{
+        padding: 20px 16px;
+    }}
+    
     .chat-title {{
-        font-size: 20px;
+        font-size: 22px;
+    }}
+    
+    .chat-subtitle {{
+        font-size: 13px;
     }}
     
     .msg-bubble {{
