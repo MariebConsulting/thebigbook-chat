@@ -17,7 +17,7 @@ st.set_page_config(page_title="The Big Book .chat", layout="wide")
 # Look: light background, BLACK text (mobile-first)
 # ============================
 PALETTE = {
-    "page_bg": "#F4F5F2",   # soft light (not khaki)
+    "page_bg": "#F4F5F2",
     "card_bg": "#FFFFFF",
     "text": "#000000",
     "muted": "rgba(0,0,0,0.58)",
@@ -25,7 +25,7 @@ PALETTE = {
     "shadow": "0 12px 38px rgba(0,0,0,0.08)",
 
     # bubbles
-    "user_bg": "#EEF3FF",   # subtle tint (NOT blue vibes; just a whisper)
+    "user_bg": "#F3F1FF",   # subtle lavender tint (not “AA blue”)
     "asst_bg": "#FFFFFF",
 
     # controls
@@ -54,7 +54,7 @@ def _ensure_chat_table():
     schema = pa.schema([
         pa.field("session_id", pa.string()),
         pa.field("ts", pa.timestamp("ms")),
-        pa.field("role", pa.string()),     # "user" | "assistant"
+        pa.field("role", pa.string()),
         pa.field("content", pa.string()),
     ])
 
@@ -96,7 +96,6 @@ def _append_message(session_id: str, role: str, content: str) -> None:
 
 
 def _reset_screen_only():
-    # clears UI, keeps DB
     st.session_state.messages = []
 
 
@@ -115,7 +114,7 @@ if "messages" not in st.session_state:
     st.session_state.messages = _load_messages(st.session_state.chat_session_id, limit=400)
 
 if "pending_prompt" not in st.session_state:
-    st.session_state.pending_prompt = None  # when set, we render "thinking..." then run ask()
+    st.session_state.pending_prompt = None
 
 # Seed welcome once per thread
 if not st.session_state.messages:
@@ -127,11 +126,10 @@ if not st.session_state.messages:
     _append_message(st.session_state.chat_session_id, "assistant", welcome)
 
 # ============================
-# CSS (clean, readable, mobile)
+# CSS (mobile-safe + keep chat_input visible on iOS)
 # ============================
 CSS = f"""
 <style>
-/* hide streamlit chrome */
 #MainMenu {{visibility: hidden;}}
 footer {{visibility: hidden;}}
 header {{visibility: hidden;}}
@@ -142,13 +140,14 @@ header {{visibility: hidden;}}
 }}
 
 .block-container {{
-  padding-top: 18px;
-  padding-bottom: 84px; /* room above chat input on mobile */
+  padding-top: 14px;
+  /* IMPORTANT: iOS Safari bottom bar + Streamlit composer */
+  padding-bottom: calc(140px + env(safe-area-inset-bottom));
   max-width: 980px;
 }}
 
 .bb-header {{
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }}
 
 .bb-title {{
@@ -177,13 +176,11 @@ header {{visibility: hidden;}}
   font-size: 13px;
 }}
 
-.bb-toprow {{
-  display:flex;
-  gap:10px;
-  margin: 12px 0 8px 0;
+.bb-actions {{
+  margin: 10px 0 6px 0;
 }}
 
-.bb-toprow .stButton > button {{
+.bb-actions .stButton > button {{
   border-radius: 14px;
   padding: 10px 12px;
   border: 1px solid {PALETTE["border"]};
@@ -192,34 +189,22 @@ header {{visibility: hidden;}}
   color: {PALETTE["text"]};
 }}
 
-.bb-toprow .stButton > button:hover {{
+.bb-actions .stButton > button:hover {{
   background: {PALETTE["btn_hover"]};
 }}
 
-/* --- FORCE the 3 action buttons to stay side-by-side (mobile too) --- */
-.bb-actions div[data-testid="stHorizontalBlock"]{{
-  flex-wrap: nowrap !important;
-  gap: 10px !important;
-}}
-
-.bb-actions div[data-testid="column"]{{
-  flex: 1 1 0% !important;
-  min-width: 0 !important;
-}}
-
-/* Make the buttons fit on mobile */
-.bb-actions .stButton > button{{
-  padding: 10px 8px !important;
-  font-size: 14px !important;
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
+.bb-actions .stPopover > button {{
+  border-radius: 14px !important;
+  padding: 10px 12px !important;
+  border: 1px solid {PALETTE["border"]} !important;
+  background: {PALETTE["btn_bg"]} !important;
+  font-weight: 900 !important;
+  color: {PALETTE["text"]} !important;
 }}
 
 .bb-chatwrap {{
   border-radius: 18px;
-  padding: 10px 10px 14px 10px;
-  background: rgba(255,255,255,0.0);
+  padding: 6px 4px 10px 4px;
 }}
 
 .bb-bubble {{
@@ -256,7 +241,7 @@ header {{visibility: hidden;}}
   color: {PALETTE["text"]};
 }}
 
-/* Make chat input (paper-airplane) look clean */
+/* Chat composer */
 div[data-testid="stChatInput"] > div {{
   border-radius: 16px !important;
   border: 1px solid {PALETTE["border"]} !important;
@@ -271,6 +256,12 @@ div[data-testid="stChatInput"] textarea {{
 
 div[data-testid="stChatInput"] textarea::placeholder {{
   color: rgba(0,0,0,0.35) !important;
+}}
+
+/* Mobile tuning */
+@media (max-width: 480px) {{
+  .bb-title {{ font-size: 34px; }}
+  .bb-pill {{ font-size: 12px; }}
 }}
 </style>
 """
@@ -291,19 +282,26 @@ st.markdown(
 )
 
 # ============================
-# Controls (only what you asked for) — FORCE 3 across
+# Actions: ONE primary + ⋯ menu (mobile-friendly)
 # ============================
-st.markdown('<div class="bb-toprow bb-actions">', unsafe_allow_html=True)
+st.markdown('<div class="bb-actions">', unsafe_allow_html=True)
+a1, a2 = st.columns([6, 1], gap="small")
 
-c1, c2, c3 = st.columns(3, gap="small")
-with c1:
+with a1:
     daily_clicked = st.button("Daily Reflection", use_container_width=True)
-with c2:
-    new_thread = st.button("New chat thread", use_container_width=True)
-with c3:
-    clear_clicked = st.button("Clear on-screen", use_container_width=True)
+
+with a2:
+    more = st.popover("⋯", use_container_width=True)
+    with more:
+        new_thread = st.button("New chat thread", use_container_width=True)
+        clear_clicked = st.button("Clear on-screen", use_container_width=True)
 
 st.markdown("</div>", unsafe_allow_html=True)
+
+if "clear_clicked" not in locals():
+    clear_clicked = False
+if "new_thread" not in locals():
+    new_thread = False
 
 if clear_clicked:
     _reset_screen_only()
@@ -322,7 +320,6 @@ st.markdown('<div class="bb-chatwrap">', unsafe_allow_html=True)
 def _render_assistant(content: str):
     raw = (content or "").strip()
 
-    # Split body vs Sources (keeps a flat list; avoids nested bullet mess)
     if "\nSources:" in raw:
         body, sources = raw.split("\nSources:", 1)
         sources_lines = [s.strip() for s in sources.splitlines() if s.strip()]
@@ -368,7 +365,7 @@ for m in st.session_state.messages:
     else:
         _render_assistant(content)
 
-# If there's a pending prompt, show "thinking..." in-chat and process it now
+# Pending prompt: show Thinking… bubble then run ask()
 if st.session_state.pending_prompt:
     prompt = st.session_state.pending_prompt
 
@@ -381,7 +378,6 @@ if st.session_state.pending_prompt:
         with st.spinner(""):
             reply = ask(prompt, filters=None, top_k=10)
 
-    # persist assistant reply
     st.session_state.messages.append({"role": "assistant", "content": reply})
     _append_message(st.session_state.chat_session_id, "assistant", reply)
 
@@ -391,23 +387,20 @@ if st.session_state.pending_prompt:
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ============================
-# Input (paper-airplane) — this is the only message entry
+# Input (paper-airplane) — only message entry
 # ============================
 user_text = st.chat_input("Message…")
 
 
 def _queue_prompt(prompt: str):
-    # persist user message
     st.session_state.messages.append({"role": "user", "content": prompt})
     _append_message(st.session_state.chat_session_id, "user", prompt)
 
-    # queue for processing on next run (so we can render Thinking… nicely)
     st.session_state.pending_prompt = prompt
     st.rerun()
 
 
 if daily_clicked:
-    # show a simple user bubble for the action
     st.session_state.messages.append({"role": "user", "content": "Daily Reflection"})
     _append_message(st.session_state.chat_session_id, "user", "Daily Reflection")
 
