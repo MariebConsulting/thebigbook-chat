@@ -196,6 +196,26 @@ header {{visibility: hidden;}}
   background: {PALETTE["btn_hover"]};
 }}
 
+/* --- FORCE the 3 action buttons to stay side-by-side (mobile too) --- */
+.bb-actions div[data-testid="stHorizontalBlock"]{{
+  flex-wrap: nowrap !important;
+  gap: 10px !important;
+}}
+
+.bb-actions div[data-testid="column"]{{
+  flex: 1 1 0% !important;
+  min-width: 0 !important;
+}}
+
+/* Make the buttons fit on mobile */
+.bb-actions .stButton > button{{
+  padding: 10px 8px !important;
+  font-size: 14px !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}}
+
 .bb-chatwrap {{
   border-radius: 18px;
   padding: 10px 10px 14px 10px;
@@ -271,16 +291,18 @@ st.markdown(
 )
 
 # ============================
-# Controls (only what you asked for)
+# Controls (only what you asked for) — FORCE 3 across
 # ============================
-st.markdown('<div class="bb-toprow">', unsafe_allow_html=True)
-c1, c2, c3 = st.columns([1, 1, 1], gap="small")
+st.markdown('<div class="bb-toprow bb-actions">', unsafe_allow_html=True)
+
+c1, c2, c3 = st.columns(3, gap="small")
 with c1:
     daily_clicked = st.button("Daily Reflection", use_container_width=True)
 with c2:
     new_thread = st.button("New chat thread", use_container_width=True)
 with c3:
     clear_clicked = st.button("Clear on-screen", use_container_width=True)
+
 st.markdown("</div>", unsafe_allow_html=True)
 
 if clear_clicked:
@@ -295,6 +317,7 @@ if new_thread:
 # Render chat history
 # ============================
 st.markdown('<div class="bb-chatwrap">', unsafe_allow_html=True)
+
 
 def _render_assistant(content: str):
     raw = (content or "").strip()
@@ -330,6 +353,7 @@ def _render_assistant(content: str):
                 + "</ul></div>",
                 unsafe_allow_html=True
             )
+
 
 for m in st.session_state.messages:
     role = m.get("role", "assistant")
@@ -371,6 +395,7 @@ st.markdown("</div>", unsafe_allow_html=True)
 # ============================
 user_text = st.chat_input("Message…")
 
+
 def _queue_prompt(prompt: str):
     # persist user message
     st.session_state.messages.append({"role": "user", "content": prompt})
@@ -379,6 +404,7 @@ def _queue_prompt(prompt: str):
     # queue for processing on next run (so we can render Thinking… nicely)
     st.session_state.pending_prompt = prompt
     st.rerun()
+
 
 if daily_clicked:
     # show a simple user bubble for the action
@@ -394,3 +420,4 @@ if daily_clicked:
 
 if user_text and user_text.strip():
     _queue_prompt(user_text.strip())
+
