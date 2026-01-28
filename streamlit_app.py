@@ -14,47 +14,55 @@ from scripts.smoke_ask import ask
 st.set_page_config(page_title="The Big Book .chat", layout="wide")
 
 # ============================
-# Palette — LIGHT, readable, mobile-first
+# Look: light background, BLACK text (mobile-first)
 # ============================
 PALETTE = {
-    "page_bg": "#F4F5F2",
+    "page_bg": "#F4F5F2",   # soft light
     "card_bg": "#FFFFFF",
     "text": "#000000",
-    "muted": "rgba(0,0,0,0.55)",
+    "muted": "rgba(0,0,0,0.58)",
     "border": "rgba(0,0,0,0.12)",
-    "shadow": "0 10px 28px rgba(0,0,0,0.08)",
+    "shadow": "0 12px 38px rgba(0,0,0,0.08)",
 
-    "user_bg": "#EEF1F6",
+    # bubbles
+    "user_bg": "#F1F1F1",   # neutral (not blue)
     "asst_bg": "#FFFFFF",
+
+    # input
+    "input_bg": "#FFFFFF",
 }
 
 # ============================
-# LanceDB
+# LanceDB chat storage
 # ============================
 DB_DIR = "./db/lancedb"
 CHAT_TABLE = "chat_messages"
+
 
 def _db():
     os.makedirs(DB_DIR, exist_ok=True)
     return lancedb.connect(DB_DIR)
 
+
 def _ensure_chat_table():
     db = _db()
-    if CHAT_TABLE in set(db.table_names()):
+    names = set(db.table_names())
+    if CHAT_TABLE in names:
         return db.open_table(CHAT_TABLE)
 
     schema = pa.schema([
         pa.field("session_id", pa.string()),
         pa.field("ts", pa.timestamp("ms")),
-        pa.field("role", pa.string()),
+        pa.field("role", pa.string()),     # "user" | "assistant"
         pa.field("content", pa.string()),
     ])
 
+    # Some LanceDB versions choke on create_table(data=[], schema=...)
     dummy = [{
         "session_id": "init",
         "ts": datetime.now(timezone.utc),
         "role": "system",
-        "content": "init",
+        "content": "initialization",
     }]
     tbl = db.create_table(CHAT_TABLE, data=dummy, schema=schema)
     try:
@@ -63,89 +71,120 @@ def _ensure_chat_table():
         pass
     return tbl
 
+
 def _load_messages(session_id: str, limit: int = 400) -> List[Dict[str, str]]:
-    df = _ensure_chat_table().to_pandas()
+    tbl = _ensure_chat_table()
+    df = tbl.to_pandas()
     if df.empty:
         return []
     df = df[df["session_id"] == session_id].sort_values("ts").tail(limit)
-    return [{"role": r["role"], "content": r["content"]} for _, r in df.iterrows()]
+    out: List[Dict[str, str]] = []
+    for _, r in df.iterrows():
+        out.append({"role": str(r["role"]), "content": str(r["content"])})
+    return out
 
-def _append_message(session_id: str, role: str, content: str):
-    _ensure_chat_table().add([{
+
+def _append_message(session_id: str, role: str, content: str) -> None:
+    tbl = _ensure_chat_table()
+    tbl.add([{
         "session_id": session_id,
         "ts": datetime.now(timezone.utc),
         "role": role,
         "content": content,
     }])
 
+
 # ============================
-# Session state
+# Session state (init FIRST)
 # ============================
 if "chat_session_id" not in st.session_state:
     st.session_state.chat_session_id = str(uuid.uuid4())
 
 if "messages" not in st.session_state:
-    st.session_state.messages = _load_messages(st.session_state.chat_session_id)
+    st.session_state.messages = _load_messages(st.session_state.chat_session_id, limit=400)
 
 if "pending_prompt" not in st.session_state:
-    st.session_state.pending_prompt = None
+    st.session_state.pending_prompt = None  # when set, render Thinking… then run ask()
 
+# Seed welcome once per thread
 if not st.session_state.messages:
     welcome = (
         "Hey — ask me anything about the Big Book or the Twelve & Twelve.\n\n"
-        "I’ll keep it grounded in the text and list sources at the end."
+        "I’ll keep it grounded in your text and list sources at the end."
     )
     st.session_state.messages = [{"role": "assistant", "content": welcome}]
     _append_message(st.session_state.chat_session_id, "assistant", welcome)
 
 # ============================
-# CSS
+# CSS (force BLACK text + fix “washed out”)
 # ============================
 CSS = f"""
 <style>
-#MainMenu, header, footer {{ visibility: hidden; }}
+/* hide streamlit chrome */
+#MainMenu {{visibility: hidden;}}
+footer {{visibility: hidden;}}
+header {{visibility: hidden;}}
 
+/* page */
 .stApp {{
-  background: {PALETTE["page_bg"]};
-  color: {PALETTE["text"]};
+  background: {PALETTE["page_bg"]} !important;
+  color: {PALETTE["text"]} !important;
 }}
 
 .block-container {{
-  max-width: 900px;
-  padding-top: 20px;
-  padding-bottom: 110px;
+  padding-top: 18px;
+  padding-bottom: 84px; /* room above chat input on mobile */
+  max-width: 980px;
 }}
 
+/* FORCE readable text everywhere (kills the faint/opacity issue) */
+html, body, p, span, div, label, li {{
+  color: {PALETTE["text"]} !important;
+  opacity: 1 !important;
+}}
+
+/* header */
+.bb-header {{
+  margin-bottom: 12px;
+}}
 .bb-title {{
-  font-size: 38px;
+  font-size: 40px;
   font-weight: 900;
+  letter-spacing: -0.02em;
   margin: 0;
 }}
-
 .bb-sub {{
-  font-size: 14px;
-  color: {PALETTE["muted"]};
   margin-top: 6px;
+  font-size: 14px;
+  color: {PALETTE["muted"]} !important;
 }}
-
 .bb-pill {{
+  display:inline-block;
   margin-top: 10px;
-  display: inline-block;
   padding: 8px 12px;
   border-radius: 999px;
   background: {PALETTE["card_bg"]};
   border: 1px solid {PALETTE["border"]};
   box-shadow: {PALETTE["shadow"]};
+  color: {PALETTE["muted"]} !important;
   font-size: 13px;
 }}
 
+/* chat area wrapper */
+.bb-chatwrap {{
+  padding: 6px 0 0 0;
+}}
+
+/* bubbles */
 .bb-bubble {{
   border-radius: 16px;
-  padding: 14px;
+  padding: 14px 14px;
   border: 1px solid {PALETTE["border"]};
-  box-shadow: {PALETTE["shadow"]};
-  background: {PALETTE["card_bg"]};
+  box-shadow: 0 10px 28px rgba(0,0,0,0.06);
   white-space: pre-wrap;
+  line-height: 1.55;
+  color: {PALETTE["text"]} !important;
+  opacity: 1 !important;
 }}
 
 .bb-user {{
@@ -156,47 +195,52 @@ CSS = f"""
   background: {PALETTE["asst_bg"]};
 }}
 
+/* sources */
 .bb-sources-title {{
   margin-top: 12px;
-  font-weight: 800;
+  font-weight: 900;
+}}
+.bb-sources ul {{
+  margin: 8px 0 0 18px;
+}}
+.bb-sources li {{
+  margin: 6px 0;
+}}
+
+/* chat input — keep it light + visible on iOS */
+div[data-testid="stChatInput"] {{
+  position: sticky;
+  bottom: 0;
+  z-index: 9999;
 }}
 
 div[data-testid="stChatInput"] > div {{
-  border-radius: 18px !important;
+  border-radius: 16px !important;
   border: 1px solid {PALETTE["border"]} !important;
-  background: #FFFFFF !important;
+  background: {PALETTE["input_bg"]} !important;
   box-shadow: {PALETTE["shadow"]} !important;
 }}
 
 div[data-testid="stChatInput"] textarea {{
+  color: {PALETTE["text"]} !important;
+  opacity: 1 !important;
   font-size: 16px !important;
-  color: #000000 !important;
 }}
 
 div[data-testid="stChatInput"] textarea::placeholder {{
   color: rgba(0,0,0,0.35) !important;
-}}
-
-/* ===== iOS POPOVER FIXES ===== */
-.stPopover > button {{
-  color: #FFFFFF !important;
-  background: #1C1C1E !important;
-  border: 1px solid rgba(255,255,255,0.25) !important;
-}}
-
-.stPopover > button span {{
-  color: #FFFFFF !important;
+  opacity: 1 !important;
 }}
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
 
 # ============================
-# Header + menu
+# Header
 # ============================
 st.markdown(
     """
-<div>
+<div class="bb-header">
   <div class="bb-title">The Big Book .chat</div>
   <div class="bb-sub">Warm guidance, grounded in the text.</div>
   <div class="bb-pill">Sources are listed at the bottom of each answer.</div>
@@ -205,67 +249,91 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-with st.popover("⋯", help="Menu"):
-    if st.button("Daily Reflection"):
-        st.session_state.messages.append({"role": "user", "content": "Daily Reflection"})
-        st.session_state.pending_prompt = (
-            "Give me today's Daily Reflection style guidance grounded only in the Big Book "
-            "and 12&12 excerpts you have. Keep it short, practical, and cite sources."
+# ============================
+# Render chat history
+# ============================
+st.markdown('<div class="bb-chatwrap">', unsafe_allow_html=True)
+
+
+def _render_assistant(content: str):
+    raw = (content or "").strip()
+
+    # Split body vs Sources (flat list; avoids nested bullet mess)
+    if "\nSources:" in raw:
+        body, sources = raw.split("\nSources:", 1)
+        sources_lines = [s.strip() for s in sources.splitlines() if s.strip()]
+    elif raw.startswith("Sources:"):
+        body = ""
+        sources_lines = [s.strip() for s in raw[len("Sources:"):].splitlines() if s.strip()]
+    else:
+        body = raw
+        sources_lines = []
+
+    with st.chat_message("assistant", avatar="📖"):
+        st.markdown(
+            f'<div class="bb-bubble bb-assistant">{html.escape(body.strip())}</div>',
+            unsafe_allow_html=True
         )
-        st.rerun()
 
-    if st.button("New chat thread"):
-        st.session_state.chat_session_id = str(uuid.uuid4())
-        st.session_state.messages = []
-        st.rerun()
+        if sources_lines:
+            cleaned = []
+            for line in sources_lines:
+                line = line.lstrip("-•").strip()
+                if line:
+                    cleaned.append(line)
 
-    if st.button("Clear on-screen"):
-        st.session_state.messages = []
-        st.rerun()
+            st.markdown('<div class="bb-sources-title">Sources:</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="bb-sources"><ul>'
+                + "".join(f"<li>{html.escape(x)}</li>" for x in cleaned)
+                + "</ul></div>",
+                unsafe_allow_html=True
+            )
 
-# ============================
-# Chat history
-# ============================
+
 for m in st.session_state.messages:
-    if m["role"] == "user":
+    role = m.get("role", "assistant")
+    content = m.get("content", "")
+
+    if role == "user":
         with st.chat_message("user", avatar="👤"):
             st.markdown(
-                f'<div class="bb-bubble bb-user">{html.escape(m["content"])}</div>',
+                f'<div class="bb-bubble bb-user">{html.escape(content)}</div>',
                 unsafe_allow_html=True
             )
     else:
-        raw = m["content"]
-        body, *sources = raw.split("\nSources:")
-        with st.chat_message("assistant", avatar="📖"):
-            st.markdown(
-                f'<div class="bb-bubble bb-assistant">{html.escape(body.strip())}</div>',
-                unsafe_allow_html=True
-            )
-            if sources:
-                lines = [l.strip("-• ") for l in sources[0].splitlines() if l.strip()]
-                st.markdown('<div class="bb-sources-title">Sources:</div>', unsafe_allow_html=True)
-                st.markdown(
-                    "<ul>" + "".join(f"<li>{html.escape(l)}</li>" for l in lines) + "</ul>",
-                    unsafe_allow_html=True
-                )
+        _render_assistant(content)
 
-# ============================
-# Thinking + input
-# ============================
+# If there's a pending prompt, show "Thinking…" then process it now
 if st.session_state.pending_prompt:
+    prompt = st.session_state.pending_prompt
+
     with st.chat_message("assistant", avatar="📖"):
         st.markdown('<div class="bb-bubble bb-assistant">Thinking…</div>', unsafe_allow_html=True)
-        reply = ask(st.session_state.pending_prompt, filters=None, top_k=10)
+        with st.spinner(""):
+            reply = ask(prompt, filters=None, top_k=10)
 
     st.session_state.messages.append({"role": "assistant", "content": reply})
     _append_message(st.session_state.chat_session_id, "assistant", reply)
+
     st.session_state.pending_prompt = None
     st.rerun()
 
+st.markdown("</div>", unsafe_allow_html=True)
+
+# ============================
+# Input (paper-airplane send)
+# ============================
 user_text = st.chat_input("Message…")
 
-if user_text and user_text.strip():
-    st.session_state.messages.append({"role": "user", "content": user_text})
-    _append_message(st.session_state.chat_session_id, "user", user_text)
-    st.session_state.pending_prompt = user_text
+
+def _queue_prompt(prompt: str):
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    _append_message(st.session_state.chat_session_id, "user", prompt)
+    st.session_state.pending_prompt = prompt
     st.rerun()
+
+
+if user_text and user_text.strip():
+    _queue_prompt(user_text.strip())
+
